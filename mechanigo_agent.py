@@ -16,14 +16,16 @@ def create_agent(
     name: str,
     handoff_description: str,
     instructions: str,
-    model: str
+    model: str,
+    tools: list = None
 ):
     openai.api_key = api_key
     return Agent(
         name=name,
         handoff_description=handoff_description,
         instructions=instructions,
-        model=model
+        model=model,
+        tools=tools or []
     )
 
 
@@ -57,6 +59,8 @@ class MechaniGoAgent:
         )
         self.runner = RunnerWrapper
         self.logger = logging.getLogger(__name__)
+
+    # tools
     
     async def inquire(self, inquiry: str):
         response = await self.runner.run(self.agent, inquiry)
