@@ -2,7 +2,7 @@ from google.cloud.exceptions import NotFound
 from google.oauth2 import service_account
 from google.cloud import bigquery
 from typing import List, Optional
-from tools import User
+from schemas import User
 import pandas as pd
 import logging
 import json

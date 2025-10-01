@@ -1,9 +1,10 @@
+from components.agent_tools import UserInfoAgent
+from components.utils import create_agent
 from config import (
     DEFAULT_AGENT_HANDOFF_DESCRIPTION,
     DEFAULT_AGENT_INSTRUCTIONS
 )
-from tools import User
-from agents import Agent, Runner, function_tool
+from agents import Agent, Runner
 import openai
 import logging
 
@@ -12,35 +13,17 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def create_agent(
-    api_key: str,
-    name: str,
-    handoff_description: str,
-    instructions: str,
-    model: str,
-    tools: list = None
-):
-    openai.api_key = api_key
-    return Agent(
-        name=name,
-        handoff_description=handoff_description,
-        instructions=instructions,
-        model=model,
-        tools=tools or []
-    )
-
-
 class RunnerWrapper:
     @staticmethod
     async def run(agent: Agent, inquiry: str):
         return await Runner.run(agent, inquiry)
 
-
 class MechaniGoAgent:
+    """Serves as the general agent and customer facing agent."""
     def __init__(
         self,
         api_key: str = None,
-        name: str = "MechaniGo Assistant",
+        name: str = "MechaniGo Bot",
         model: str = "gpt-4o-mini"
     ):
         self.api_key = api_key or openai.api_key or None
@@ -51,33 +34,20 @@ class MechaniGoAgent:
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
         self.instructions = DEFAULT_AGENT_INSTRUCTIONS
         self.model = model
-        tools = [self.extract_user_information]
+
+        user_info_agent = UserInfoAgent(api_key=self.api_key, model=self.model)
+
         self.agent = create_agent(
-            self.api_key,
-            self.name,
-            self.handoff_description,
-            self.instructions,
-            self.model,
-            tools=tools
+            api_key=self.api_key,
+            name=self.name,
+            handoff_description=self.handoff_description,
+            instructions=self.instructions,
+            model=self.model,
+            tools=[user_info_agent.as_tool]
         )
         self.runner = RunnerWrapper
         self.logger = logging.getLogger(__name__)
 
-    # tools
-    # Persistent memory and context
-    # retrieve from bq
-    @function_tool
-    def extract_user_information(user: User):
-        try:
-            return {
-                "status": "success",
-                "user": user.model_dump()
-            }
-        except Exception as e:
-            return {
-                "error": str(e)
-            }
-    
     async def inquire(self, inquiry: str):
         response = await self.runner.run(self.agent, inquiry)
         return response.final_output
