@@ -1,15 +1,14 @@
 from mechanigo_agent import MechaniGoAgent
 import asyncio
 
-async def main():
-    mgo = MechaniGoAgent(
-        api_key=None,
-        name="Rock Music Helper",
-        handoff_description="A specialized agent knowledgeable in rock music history",
-        instructions="You provide assistance with information and fun facts about the history of rock music."
-    )
+from dotenv import load_dotenv
+import os
 
-    res = await mgo.inquire("When was the Beatles formed?")
+load_dotenv()
+
+async def main():
+    mgo = MechaniGoAgent(api_key=os.getenv("OPENAI_API_KEY"))
+    res = await mgo.inquire("How much is PMS for Toyota Vios?")
     print(res)
 
 if __name__ == "__main__":
