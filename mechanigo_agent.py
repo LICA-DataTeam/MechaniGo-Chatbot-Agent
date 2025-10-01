@@ -2,7 +2,8 @@ from config import (
     DEFAULT_AGENT_HANDOFF_DESCRIPTION,
     DEFAULT_AGENT_INSTRUCTIONS
 )
-from agents import Agent, Runner
+from tools import User
+from agents import Agent, Runner, function_tool
 import openai
 import logging
 
@@ -50,17 +51,32 @@ class MechaniGoAgent:
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
         self.instructions = DEFAULT_AGENT_INSTRUCTIONS
         self.model = model
+        tools = [self.extract_user_information]
         self.agent = create_agent(
             self.api_key,
             self.name,
             self.handoff_description,
             self.instructions,
-            self.model
+            self.model,
+            tools=tools
         )
         self.runner = RunnerWrapper
         self.logger = logging.getLogger(__name__)
 
     # tools
+    # Persistent memory and context
+    # retrieve from bq
+    @function_tool
+    def extract_user_information(user: User):
+        try:
+            return {
+                "status": "success",
+                "user": user.model_dump()
+            }
+        except Exception as e:
+            return {
+                "error": str(e)
+            }
     
     async def inquire(self, inquiry: str):
         response = await self.runner.run(self.agent, inquiry)
