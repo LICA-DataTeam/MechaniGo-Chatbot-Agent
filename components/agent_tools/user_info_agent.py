@@ -1,4 +1,5 @@
 from components.utils import create_agent, BigQueryClient
+from google.cloud import bigquery
 from agents import function_tool
 from schemas import User
 import traceback
@@ -71,9 +72,25 @@ class UserInfoAgent:
 
         return extract_user_info
 
+    def _ensure_users_table(self):
+        schema = [
+            bigquery.SchemaField("uid", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("name", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("address", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("contact_num", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("schedule_date", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("schedule_time", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("payment", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("car", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("raw_json", "STRING", mode="NULLABLE"),
+        ]
+        self.bq_client.ensure_dataset()
+        self.bq_client.ensure_table(self.table_name, schema)
+
     def _save_user(self, user: User):
         try:
             if self.bq_client:
+                self._ensure_users_table()
                 if not user.uid:
                     user.uid = str(uuid.uuid4())
                 self.logger.info(f"Inserting user {user.name} to {self.table_name}...")
