@@ -1,3 +1,4 @@
+from components.utils import BigQueryClient
 from components import MechaniGoAgent
 import streamlit as st
 import asyncio
@@ -7,6 +8,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+def init_bq_client(credentials_file: str, dataset_id: str):
+    try:
+        return BigQueryClient(credentials_file=credentials_file, dataset_id=dataset_id)
+    except Exception as e:
+        st.error(f"Failed to initialize BigQuery: {e}")
+        return None
 
 async def handle_user_input(agent: MechaniGoAgent, message: str):
     return await agent.inquire(message)
@@ -21,7 +29,10 @@ def main():
         except KeyError:
             st.error("No OpenAI API key found in `.streamlit/secrets.toml`.")
             return
-        st.session_state.agent = MechaniGoAgent(api_key=api_key)
+
+        if "bq_client" not in st.session_state:
+            st.session_state.bq_client = init_bq_client('google_creds.json', 'conversations')
+        st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client)
 
     if st.button("Reset"):
         st.session_state.agent = None
