@@ -3,6 +3,7 @@ from agents import function_tool
 from schemas import User
 import traceback
 import logging
+import uuid
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,7 +50,8 @@ class UserInfoAgent:
                 "then say 'Information saved. Please provide schedule date...'\n\n"
                 "REMEMBER: You MUST call extract_user_info for EVERY message that contains user data. "
                 "Partial data is acceptable - save what you have!\n\n"
-                "Show the error logs if any, ex: if you can't save the information due to a technical issue."
+                "Show the error logs if any, ex: if you can't save the information due to a technical issue.\n\n"
+                "IMPORTANT: Do not attempt to guess or extract the uid, the uid is always generated internally by the system."
             ),
             model=self.model,
             tools=[extract_tool]
@@ -72,6 +74,8 @@ class UserInfoAgent:
     def _save_user(self, user: User):
         try:
             if self.bq_client:
+                if not user.uid:
+                    user.uid = str(uuid.uuid4())
                 self.logger.info(f"Inserting user {user.name} to {self.table_name}...")
                 self.bq_client.insert_user(self.table_name, user)
                 return {
