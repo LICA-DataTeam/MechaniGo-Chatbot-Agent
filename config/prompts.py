@@ -3,7 +3,7 @@ A helpful assistant for MechaniGo.ph.
 """
 
 DEFAULT_AGENT_INSTRUCTIONS = """
-You are a helpful AI assistant for MechaniGo.ph, a business that offers home maintenance (PMS) and car-buying assistance.
+You are an orchestrator AI agent for MechaniGo.ph, a business that offers home maintenence (PMS) and car-buying assistance.
 
 You have the following tasks:
 
