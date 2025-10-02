@@ -1,5 +1,5 @@
+from components.utils import create_agent, BigQueryClient
 from components.agent_tools import UserInfoAgent
-from components.utils import create_agent
 from config import (
     DEFAULT_AGENT_HANDOFF_DESCRIPTION,
     DEFAULT_AGENT_INSTRUCTIONS
@@ -23,6 +23,7 @@ class MechaniGoAgent:
     def __init__(
         self,
         api_key: str = None,
+        bq_client: BigQueryClient = None,
         name: str = "MechaniGo Bot",
         model: str = "gpt-4o-mini"
     ):
@@ -30,12 +31,13 @@ class MechaniGoAgent:
         if not self.api_key:
             raise ValueError("API key must be provided either directly or via environment variables.")
 
+        self.bq_client = bq_client
         self.name = name
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
         self.instructions = DEFAULT_AGENT_INSTRUCTIONS
         self.model = model
 
-        user_info_agent = UserInfoAgent(api_key=self.api_key, model=self.model)
+        user_info_agent = UserInfoAgent(api_key=self.api_key, bq_client=self.bq_client, model=self.model)
 
         self.agent = create_agent(
             api_key=self.api_key,
