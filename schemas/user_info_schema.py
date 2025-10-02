@@ -22,7 +22,7 @@ class User(BaseModel):
     name: str
     address: str
     contact_num: str
-    schedule_date: str
-    schedule_time: str
+    schedule_date: str = None
+    schedule_time: str = None
     payment: Optional[PaymentType] = None
     car: Optional[UserCarDetails] = None
