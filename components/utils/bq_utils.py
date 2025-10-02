@@ -69,6 +69,7 @@ class BigQueryClient:
     def insert_user(self, table_name: str, user: User):
         user_dict = user.model_dump()
         row = {
+            "uid": user_dict.get("uid"),
             "name": user_dict.get("name"),
             "address": user_dict.get("address"),
             "contact_num": user_dict.get("contact_num"),

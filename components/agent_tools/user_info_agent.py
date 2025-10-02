@@ -15,12 +15,13 @@ class UserInfoAgent:
         self,
         api_key: str,
         bq_client: BigQueryClient = None,
+        table_name: str = "mgo_chatbot_users",
         name: str = "user_info_agent",
         model: str = "gpt-4o-mini"
     ):
         self.api_key = api_key
         self.bq_client = bq_client
-        self.table_name = "mgo_chatbot_users"
+        self.table_name = table_name
         self.name = name
         self.model = model
         self.description = "Handles processing of user information."

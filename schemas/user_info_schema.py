@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
+import uuid
 
 class PaymentType(str, Enum):
     GCASH = "gcash"
@@ -19,6 +20,7 @@ class UserCarDetails(BaseModel):
     transmission: Optional[TransmissionType] = None
 
 class User(BaseModel):
+    uid: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     address: str
     contact_num: str
