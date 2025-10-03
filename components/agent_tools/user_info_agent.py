@@ -1,6 +1,8 @@
 from components.utils import create_agent, BigQueryClient
+from agents import RunContextWrapper, function_tool
 from google.cloud import bigquery
-from agents import function_tool
+from pydantic import BaseModel
+from typing import Optional
 from schemas import User
 import traceback
 import logging
@@ -10,6 +12,15 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+class UserInfoAgentContext(BaseModel):
+    user_memory: User
+    bq_client: BigQueryClient
+    table_name: str
+
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
 
 class UserInfoAgent:
     """Handles all user info related processing."""
@@ -29,33 +40,24 @@ class UserInfoAgent:
         self.description = "Handles processing of user information."
         self.logger = logging.getLogger(__name__)
 
-        extract_tool = self._create_extract_user_tool()
+        extract_user_info = self._create_ctx_extract_user_tool()
+        get_user_info = self._create_ctx_get_user_tool()
 
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.description,
             instructions=(
-                "You are a user information extraction and storage agent.\n\n"
+                "You are a user information memory agent.\n\n"
                 "ABSOLUTE REQUIREMENT:\n"
-                "When you receive ANY user information (even partial), you MUST IMMEDIATELY call "
-                "the extract_user_info function to save it. Do NOT wait for complete information. "
-                "Do NOT ask for more details before saving. Save first, then ask for missing details.\n\n"
-                "WORKFLOW (MANDATORY):\n"
-                "1. Extract whatever user information is available from the message\n"
-                "2. IMMEDIATELY call extract_user_info() with the extracted data (even if partial)\n"
-                "3. AFTER saving, you may ask for missing information\n\n"
-                "EXAMPLES:\n"
-                "❌ WRONG: 'Thank you. Please provide schedule date...'\n"
-                "✅ CORRECT: Call extract_user_info(User(name='Walter', address='308...')) FIRST, "
-                "then say 'Information saved. Please provide schedule date...'\n\n"
-                "REMEMBER: You MUST call extract_user_info for EVERY message that contains user data. "
-                "Partial data is acceptable - save what you have!\n\n"
+                "Call extract_user_info when the customer provides their details\n\n"
+                "You can call get_user_info when asked to recall details\n\n"
+                "Do not re-ask for details that are already known\n\n"
                 "Show the error logs if any, ex: if you can't save the information due to a technical issue.\n\n"
                 "IMPORTANT: Do not attempt to guess or extract the uid, the uid is always generated internally by the system."
             ),
             model=self.model,
-            tools=[extract_tool]
+            tools=[extract_user_info, get_user_info]
         )
 
     @property
@@ -65,6 +67,27 @@ class UserInfoAgent:
             tool_description=self.description
         )
 
+    def _create_ctx_extract_user_tool(self):
+        @function_tool
+        def ctx_extract_user_info(
+            ctx: RunContextWrapper[UserInfoAgentContext],
+            name: Optional[str] = None,
+            address: Optional[str] = None,
+            contact_num: Optional[str] = None,
+            schedule_date: Optional[str] = None,
+            schedule_time: Optional[str] = None,
+            payment: Optional[str] = None,
+            car: Optional[str] = None
+        ):
+            return self._ctx_extract_user_info(ctx, name, address, contact_num, schedule_date, schedule_time, payment, car)
+        return ctx_extract_user_info
+
+    def _create_ctx_get_user_tool(self):
+        @function_tool
+        def ctx_get_user_info(ctx: RunContextWrapper[UserInfoAgentContext]):
+            return self._ctx_get_user_info(ctx)
+        return ctx_get_user_info
+
     def _create_extract_user_tool(self):
         @function_tool
         def extract_user_info(user: User):
@@ -72,7 +95,67 @@ class UserInfoAgent:
 
         return extract_user_info
 
+    def _ctx_extract_user_info(
+        self,
+        ctx: RunContextWrapper[UserInfoAgentContext],
+        name: Optional[str] = None,
+        address: Optional[str] = None,
+        contact_num: Optional[str] = None,
+        schedule_date: Optional[str] = None,
+        schedule_time: Optional[str] = None,
+        payment: Optional[str] = None,
+        car: Optional[str] = None
+    ):
+        user = ctx.context.user_memory
+        if name: user.name = name
+        if address: user.address = address
+        if contact_num: user.contact_num = contact_num
+        if schedule_date: user.schedule_date = schedule_date
+        if schedule_time: user.schedule_time = schedule_time
+        if payment: user.payment = payment
+        if car: user.car = car
+
+        self.logger.info(f"Updated user memory: {user}")
+        try:
+            if ctx.context.bq_client:
+                self._ensure_users_table()
+                self.logger.info(f"Upserting {user.name} into {ctx.context.table_name}")
+                ctx.context.bq_client.upsert_user(ctx.context.table_name, user)
+                fresh = ctx.context.bq_client.get_user_by_uid(ctx.context.table_name, user.uid)
+                if fresh:
+                    if isinstance(fresh, dict):
+                        ctx.context.user_memory = User(**fresh)
+                    elif isinstance(fresh, User):
+                        ctx.context.user_memory = fresh
+        except Exception as e:
+            traceback.print_exc()
+            self.logger.error(f"Failed to upsert user: {e}")
+            return {"status": "failed", "user": user}
+
+        return {"status": "updated", "user": user}
+
+    def _ctx_get_user_info(self, ctx: RunContextWrapper[UserInfoAgentContext]):
+        try:
+            user = ctx.context.user_memory
+            if user and any([user.name, user.address, user.car, user.uid]):
+                return {"status": "success", "user": user.model_dump()}
+            
+            if user and user.uid:
+                db_user = ctx.context.bq_client.get_user_by_uid(
+                    ctx.context.table_name,
+                    user.uid
+                )
+                if db_user:
+                    return {"status": "success", "user": db_user}
+
+            return {"status": "not_found", "message": "No user data yet."}
+        except Exception as e:
+            traceback.print_exc()
+            self.logger.error(f"Failed to retrieve user: {e}")
+            return {"message": "No user data yet."}
+
     def _ensure_users_table(self):
+        self.logger.info("Ensuring dataset and table in BigQuery...")
         schema = [
             bigquery.SchemaField("uid", "STRING", mode="REQUIRED"),
             bigquery.SchemaField("name", "STRING", mode="NULLABLE"),
@@ -86,31 +169,4 @@ class UserInfoAgent:
         ]
         self.bq_client.ensure_dataset()
         self.bq_client.ensure_table(self.table_name, schema)
-
-    def _save_user(self, user: User):
-        try:
-            if self.bq_client:
-                self._ensure_users_table()
-                if not user.uid:
-                    user.uid = str(uuid.uuid4())
-                self.logger.info(f"Inserting user {user.name} to {self.table_name}...")
-                self.bq_client.insert_user(self.table_name, user)
-                return {
-                    "status": "success",
-                    "message": f"User information for {user.name} extracted and saved to BigQuery.",
-                    "user": user
-                }
-            else:
-                self.logger.error("BigQuery client not configured!")
-                return {
-                    "status": "success",
-                    "message": "User information extracted.",
-                    "user": user
-                }
-        except Exception as e:
-            traceback.print_exc()
-            return {
-                "status": "error",
-                "message": f"Failed to save user information: {str(e)}",
-                "user": user
-            }
+        self.logger.info("Done!")
