@@ -26,5 +26,5 @@ class User(BaseModel):
     contact_num: Optional[str] = None
     schedule_date: Optional[str] = None
     schedule_time: Optional[str] = None
-    payment: Optional[PaymentType] = None
-    car: Optional[UserCarDetails] = None
+    payment: Optional[str] = None
+    car: Optional[str] = None
