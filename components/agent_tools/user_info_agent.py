@@ -56,8 +56,9 @@ class UserInfoAgent:
                 "Show the error logs if any, ex: if you can't save the information due to a technical issue.\n\n"
                 "IMPORTANT: Do not attempt to guess or extract the uid, the uid is always generated internally by the system."
             ),
+            output_type=User,
             model=self.model,
-            tools=[extract_user_info, get_user_info]
+            tools=[extract_user_info, get_user_info],
         )
 
     @property
