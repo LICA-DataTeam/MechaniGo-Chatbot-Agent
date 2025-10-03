@@ -1,8 +1,8 @@
-from components.agent_tools import UserInfoAgent, AgentContext
-from agents import Runner, RunContextWrapper
+from components.agent_tools import UserInfoAgent, UserInfoAgentContext
 from components.utils import BigQueryClient
 from google.cloud import bigquery
 from dotenv import load_dotenv
+from agents import Runner
 from schemas import User
 import traceback
 import asyncio
@@ -60,7 +60,7 @@ async def test():
     logging.info("Testing UserInfoAgent with Context Manager")
     runner = Runner()
     try:
-        context = AgentContext(
+        context = UserInfoAgentContext(
             user_memory=User(uid=str(uuid.uuid4())),
             bq_client=bq,
             table_name=table_name
@@ -68,7 +68,7 @@ async def test():
 
         response = await runner.run(
             user_info_agent.agent,
-            "My name is Walter Hartwell White and I drive a white Toyota Vios 2019. My contact num is 09171234567",
+            "My name is Walter Hartwell White, I live at 308 Negra Arroyo Lane, I drive a white 2004 Pontiac Aztek.",
             context=context
         )
         print(response.final_output)
@@ -82,7 +82,7 @@ async def test():
 
         response3 = await runner.run(
             user_info_agent.agent,
-            "My preferred schedule is Oct 25, 2025 at around 10 am and I prefer gcash as my mode of payment",
+            "My preferred schedule is Oct 19, 2025 at around 10 am and I prefer cash as my mode of payment",
             context=context
         )
         print(response3.final_output)

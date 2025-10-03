@@ -1,7 +1,10 @@
+from components.agent_tools import UserInfoAgentContext
 from components.utils import BigQueryClient
 from components import MechaniGoAgent
+from schemas import User
 import streamlit as st
 import asyncio
+import uuid
 
 st.set_page_config(
     page_title="MechaniGo Chatbot",
@@ -32,7 +35,14 @@ def main():
 
         if "bq_client" not in st.session_state:
             st.session_state.bq_client = init_bq_client('google_creds.json', 'conversations')
-        st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client)
+
+        if "context" not in st.session_state:
+            st.session_state.context = UserInfoAgentContext(
+                user_memory=User(uid=str(uuid.uuid4())),
+                bq_client=st.session_state.bq_client,
+                table_name="chatbot_users_test"
+            )
+        st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client, context=st.session_state.context)
 
     if st.button("Reset"):
         st.session_state.agent = None
