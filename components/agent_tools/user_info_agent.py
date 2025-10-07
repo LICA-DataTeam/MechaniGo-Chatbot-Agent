@@ -2,11 +2,10 @@ from components.utils import create_agent, BigQueryClient
 from agents import RunContextWrapper, function_tool
 from google.cloud import bigquery
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from schemas import User
 import traceback
 import logging
-import uuid
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,7 +97,7 @@ class UserInfoAgent:
 
     def _ctx_extract_user_info(
         self,
-        ctx: RunContextWrapper[UserInfoAgentContext],
+        ctx: RunContextWrapper[Any],
         name: Optional[str] = None,
         address: Optional[str] = None,
         contact_num: Optional[str] = None,
@@ -107,7 +106,7 @@ class UserInfoAgent:
         payment: Optional[str] = None,
         car: Optional[str] = None
     ):
-        user = ctx.context.user_memory
+        user = ctx.context.user_ctx.user_memory
         if name: user.name = name
         if address: user.address = address
         if contact_num: user.contact_num = contact_num
@@ -118,16 +117,16 @@ class UserInfoAgent:
 
         self.logger.info(f"Updated user memory: {user}")
         try:
-            if ctx.context.bq_client:
+            if ctx.context.user_ctx.bq_client:
                 self._ensure_users_table()
-                self.logger.info(f"Upserting {user.name} into {ctx.context.table_name}")
-                ctx.context.bq_client.upsert_user(ctx.context.table_name, user)
-                fresh = ctx.context.bq_client.get_user_by_uid(ctx.context.table_name, user.uid)
+                self.logger.info(f"Upserting {user.name} into {ctx.context.user_ctx.table_name}")
+                ctx.context.user_ctx.bq_client.upsert_user(ctx.context.user_ctx.table_name, user)
+                fresh = ctx.context.user_ctx.bq_client.get_user_by_uid(ctx.context.user_ctx.table_name, user.uid)
                 if fresh:
                     if isinstance(fresh, dict):
-                        ctx.context.user_memory = User(**fresh)
+                        ctx.context.user_ctx.user_memory = User(**fresh)
                     elif isinstance(fresh, User):
-                        ctx.context.user_memory = fresh
+                        ctx.context.user_ctx.user_memory = fresh
         except Exception as e:
             traceback.print_exc()
             self.logger.error(f"Failed to upsert user: {e}")
@@ -135,15 +134,15 @@ class UserInfoAgent:
 
         return {"status": "updated", "user": user}
 
-    def _ctx_get_user_info(self, ctx: RunContextWrapper[UserInfoAgentContext]):
+    def _ctx_get_user_info(self, ctx: RunContextWrapper[Any]):
         try:
-            user = ctx.context.user_memory
+            user = ctx.context.user_ctx.user_memory
             if user and any([user.name, user.address, user.car, user.uid]):
                 return {"status": "success", "user": user.model_dump()}
             
             if user and user.uid:
-                db_user = ctx.context.bq_client.get_user_by_uid(
-                    ctx.context.table_name,
+                db_user = ctx.context.user_ctx.bq_client.get_user_by_uid(
+                    ctx.context.user_ctx.table_name,
                     user.uid
                 )
                 if db_user:
