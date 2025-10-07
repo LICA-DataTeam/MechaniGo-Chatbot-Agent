@@ -1,14 +1,11 @@
 from components.agent_tools import UserInfoAgent, UserInfoAgentContext
 from components.agent_tools import MechanicAgent, MechanicAgentContext
 from components.utils import create_agent, BigQueryClient
-from config import (
-    DEFAULT_AGENT_HANDOFF_DESCRIPTION,
-    DEFAULT_AGENT_INSTRUCTIONS
-)
+from config import DEFAULT_AGENT_HANDOFF_DESCRIPTION
+from agents import Agent, Runner, RunContextWrapper
 from schemas import User, UserCarDetails
 from pydantic import BaseModel
 from typing import Optional
-from agents import Runner
 import openai
 import logging
 import uuid
@@ -45,7 +42,6 @@ class MechaniGoAgent:
         self.bq_client = bq_client
         self.name = name
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
-        self.instructions = DEFAULT_AGENT_INSTRUCTIONS
         self.model = model
 
         if not context:
@@ -76,11 +72,37 @@ class MechaniGoAgent:
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.handoff_description,
-            instructions=self.instructions,
+            instructions=self._dynamic_instructions,
             model=self.model,
             tools=[user_info_agent.as_tool, mechanic_agent.as_tool]
         )
         self.logger = logging.getLogger(__name__)
+    
+    async def _dynamic_instructions(
+        self,
+        ctx: RunContextWrapper[MechaniGoContext],
+        agent: Agent
+    ):
+        user_name = ctx.context.user_ctx.user_memory.name or "Unknown User"
+
+        car = ctx.context.user_ctx.user_memory.car
+        car_summary = f"{car or ''}"
+
+        self.logger.info("========== DETAILS ==========")
+        self.logger.info(f"User name: {user_name}")
+        self.logger.info(f"Car summary: {car_summary}")
+        prompt = (
+            f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph, a business that offers home maintenance (PMS) and car-buying assistance.\n\n"
+            "You are the customer-facing agent which handles responding to customer inquiries.\n\n"
+            f"The current user is {user_name}.\n\n"
+            f"Their car is {car_summary}."
+            "Your job is to use the tools given to you to accomplish your tasks:\n\n"
+            "- Use user_info_agent for user info related tasks\n\n"
+            "- Use mechanic_agent for car-related inquiries\n\n"
+            "- Do not attempt to solve the tasks directly; always use the tools to accomplish the tasks.\n\n"
+            "- Provide a clear and concise response back to the customer.\n\n"
+        )
+        return prompt
 
     async def inquire(self, inquiry: str):
         response = await Runner.run(
