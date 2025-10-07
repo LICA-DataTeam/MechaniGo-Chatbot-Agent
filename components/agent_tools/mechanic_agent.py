@@ -31,6 +31,8 @@ class MechanicAgent:
         self.description = "Handles car related inquiries."
         self.logger = logging.getLogger(__name__)
 
+        extract_car_info = self._create_extract_car_info()
+
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
@@ -45,7 +47,7 @@ class MechanicAgent:
                 "Important: Show the error logs if any.\n\n"
             ),
             model=self.model,
-            tools=[]
+            tools=[extract_car_info]
         )
 
     @property
