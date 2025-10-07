@@ -1,7 +1,7 @@
-from components.agent_tools import UserInfoAgentContext
+from components.agent_tools import UserInfoAgentContext, MechanicAgentContext
+from components import MechaniGoAgent, MechaniGoContext
 from components.utils import BigQueryClient
-from components import MechaniGoAgent
-from schemas import User
+from schemas import User, UserCarDetails
 import streamlit as st
 import asyncio
 import uuid
@@ -37,10 +37,15 @@ def main():
             st.session_state.bq_client = init_bq_client('google_creds.json', 'conversations')
 
         if "context" not in st.session_state:
-            st.session_state.context = UserInfoAgentContext(
-                user_memory=User(uid=str(uuid.uuid4())),
-                bq_client=st.session_state.bq_client,
-                table_name="chatbot_users_test"
+            st.session_state.context = MechaniGoContext(
+                user_ctx=UserInfoAgentContext(
+                    user_memory=User(uid=str(uuid.uuid4())),
+                    bq_client=st.session_state.bq_client,
+                    table_name="chatbot_users_test"
+                ),
+                mechanic_ctx=MechanicAgentContext(
+                    car_memory=UserCarDetails()
+                )
             )
         st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client, context=st.session_state.context)
 
