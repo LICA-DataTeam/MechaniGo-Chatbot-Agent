@@ -1,5 +1,8 @@
-from components.agent_tools import UserInfoAgent, UserInfoAgentContext
-from components.agent_tools import MechanicAgent, MechanicAgentContext
+from components.agent_tools import (
+    UserInfoAgent, UserInfoAgentContext,
+    MechanicAgent, MechanicAgentContext,
+    FAQAgent
+)
 from components.utils import create_agent, BigQueryClient
 from config import DEFAULT_AGENT_HANDOFF_DESCRIPTION
 from agents import Agent, Runner, RunContextWrapper
@@ -68,13 +71,17 @@ class MechaniGoAgent:
             api_key=self.api_key
         )
 
+        faq_agent = FAQAgent(
+            api_key=self.api_key
+        )
+
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.handoff_description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[user_info_agent.as_tool, mechanic_agent.as_tool]
+            tools=[user_info_agent.as_tool, mechanic_agent.as_tool, faq_agent.as_tool]
         )
         self.logger = logging.getLogger(__name__)
     
