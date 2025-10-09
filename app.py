@@ -1,4 +1,4 @@
-from components.agent_tools import UserInfoAgentContext, MechanicAgentContext
+from components.agent_tools import UserInfoAgentContext, MechanicAgentContext, BookingAgentContext
 from components import MechaniGoAgent, MechaniGoContext
 from components.utils import BigQueryClient
 from schemas import User, UserCarDetails
@@ -45,7 +45,8 @@ def main():
                 ),
                 mechanic_ctx=MechanicAgentContext(
                     car_memory=UserCarDetails()
-                )
+                ),
+                booking_ctx=BookingAgentContext()
             )
         st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client, context=st.session_state.context)
 
