@@ -19,9 +19,9 @@ logging.basicConfig(
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+TABLE_NAME = "chatbot_users_test"
 async def test():
     logging.info("Initializing BigQuery...")
-    table_name = "chatbot_users_test"
     try:
         bq = BigQueryClient('google_creds.json', 'conversations')
         bq.ensure_dataset()
@@ -36,7 +36,7 @@ async def test():
             bigquery.SchemaField("car", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("raw_json", "STRING", mode="NULLABLE"),
         ]
-        bq.ensure_table(table_name, schema)
+        bq.ensure_table(TABLE_NAME, schema)
         logging.info("BigQuery client initialized!")
     except Exception as e:
         logging.error(f"BigQuery initialization failed: {e}")
@@ -46,9 +46,7 @@ async def test():
     try:
         ctx1 = MechaniGoContext(
             user_ctx=UserInfoAgentContext(
-                user_memory=User(uid=str(uuid.uuid4())),
-                bq_client=bq,
-                table_name=table_name
+                user_memory=User(uid=str(uuid.uuid4()))
             ),
             mechanic_ctx=MechanicAgentContext(
                 car_memory=UserCarDetails()
@@ -64,6 +62,7 @@ async def test():
         agent1 = MechaniGoAgent(
             api_key=os.getenv("OPENAI_API_KEY"),
             bq_client=bq,
+            table_name=TABLE_NAME,
             context=ctx1
         )
         logging.info("MechaniGoAgent created!")
@@ -82,6 +81,8 @@ async def test():
 
         My preferred payment is gcash.
         """
+        # Note: to save the user data
+        # use agent1.inquire() instead of runner.run()
         logging.info("========== Sample Conversation ==========")
         logging.info(f"user: {input1}\n")
         response1 = await runner.run(
