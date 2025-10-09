@@ -8,6 +8,7 @@ from components.utils import create_agent, BigQueryClient
 from config import DEFAULT_AGENT_HANDOFF_DESCRIPTION
 from agents import Agent, Runner, RunContextWrapper
 from schemas import User, UserCarDetails
+from google.cloud import bigquery
 from pydantic import BaseModel
 from typing import Optional
 import openai
@@ -18,8 +19,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
-
-TABLE_NAME = "chatbot_users_table"
 
 class MechaniGoContext(BaseModel):
     user_ctx: UserInfoAgentContext
@@ -36,25 +35,29 @@ class MechaniGoAgent:
         self,
         api_key: str = None,
         bq_client: BigQueryClient = None,
+        table_name: str = "chatbot_users_test",
         name: str = "MechaniGo Bot",
         model: str = "gpt-4o-mini",
         context: Optional[MechaniGoContext] = None
     ):
+        self.logger = logging.getLogger(__name__)
         self.api_key = api_key or openai.api_key or None
         if not self.api_key:
             raise ValueError("API key must be provided either directly or via environment variables.")
 
         self.bq_client = bq_client
+        self.table_name = table_name
         self.name = name
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
         self.model = model
 
+        if self.bq_client:
+            self._ensure_users_table()
+
         if not context:
             context = MechaniGoContext(
                 user_ctx=UserInfoAgentContext(
-                    user_memory=User(uid=str(uuid.uuid4())),
-                    bq_client=self.bq_client,
-                    table_name=TABLE_NAME
+                    user_memory=User(uid=str(uuid.uuid4()))
                 ),
                 mechanic_ctx=MechanicAgentContext(
                     car_memory=UserCarDetails()
@@ -65,8 +68,6 @@ class MechaniGoAgent:
         self.context = context
         user_info_agent = UserInfoAgent(
             api_key=self.api_key,
-            bq_client=self.bq_client,
-            table_name=TABLE_NAME,
             model=self.model
         )
 
@@ -90,19 +91,12 @@ class MechaniGoAgent:
             model=self.model,
             tools=[user_info_agent.as_tool, mechanic_agent.as_tool, faq_agent.as_tool, booking_agent.as_tool]
         )
-        self.logger = logging.getLogger(__name__)
     
     async def _dynamic_instructions(
         self,
         ctx: RunContextWrapper[MechaniGoContext],
         agent: Agent
     ):
-        # user_name = ctx.context.user_ctx.user_memory.name or "Unknown User"
-        # user_sched_date = ctx.context.user_ctx.user_memory.schedule_date or "Unknown date"
-        # user_sched_time = ctx.context.user_ctx.user_memory.schedule_time or "Unknown time"
-        # user_payment = ctx.context.user_ctx.user_memory.payment or "No payment"
-        # car = ctx.context.user_ctx.user_memory.car
-
         # raw values
         user_name = ctx.context.user_ctx.user_memory.name
         user_sched_date = ctx.context.user_ctx.user_memory.schedule_date
@@ -161,7 +155,6 @@ class MechaniGoAgent:
         if has_user_info and has_schedule and has_payment and has_car:
             prompt += (
                 "All information is complete - Booking is ready!\n\n"
-                "- Call user_info_agent again to update and save the user information.\n\n"
                 "If user confirms, simply acknowledge and thank them. DO NOT call any sub-agents again.\n\n"
                 "If user wants to modify something, use the appropriate sub-agent.\n\n"
                 "- You can still use faq_agent if the user has questions.\n\n"
@@ -196,4 +189,37 @@ class MechaniGoAgent:
             input=inquiry,
             context=self.context
         )
+        self.save_user_state()
         return response.final_output
+
+    def save_user_state(self):
+        try:
+            user = self.context.user_ctx.user_memory
+            if not user.uid:
+                self.logger.warning("No user UID - skipping save.")
+                return
+            self.logger.info(f"Saving user to BigQuery: name={user.name}, uid={user.uid}")
+            self.bq_client.upsert_user(
+                table_name=self.table_name,
+                user=user
+            )
+            self.logger.info("User saved to BigQuery successfully!")
+        except Exception as e:
+            self.logger.error(f"Error saving user information: {e}")
+
+    def _ensure_users_table(self):
+        self.logger.info("Ensuring dataset and table in BigQuery...")
+        schema = [
+            bigquery.SchemaField("uid", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("name", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("address", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("contact_num", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("schedule_date", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("schedule_time", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("payment", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("car", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("raw_json", "STRING", mode="NULLABLE"),
+        ]
+        self.bq_client.ensure_dataset()
+        self.bq_client.ensure_table(self.table_name, schema)
+        self.logger.info("Done!")
