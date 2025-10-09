@@ -1,5 +1,6 @@
 from components.agent_tools import UserInfoAgentContext, MechanicAgentContext, BookingAgentContext
 from components import MechaniGoAgent, MechaniGoContext
+from config import TEST_TABLE_NAME, DATASET_NAME # change table name later
 from components.utils import BigQueryClient
 from schemas import User, UserCarDetails
 import streamlit as st
@@ -30,25 +31,28 @@ def main():
         try:
             api_key = st.secrets["OPENAI_API_KEY"]
         except KeyError:
-            st.error("No OpenAI API key found in `.streamlit/secrets.toml`.")
+            st.error("No OpenAI API key found in secrets.")
             return
 
         if "bq_client" not in st.session_state:
-            st.session_state.bq_client = init_bq_client('google_creds.json', 'conversations')
+            st.session_state.bq_client = init_bq_client('google_creds.json', DATASET_NAME)
 
         if "context" not in st.session_state:
             st.session_state.context = MechaniGoContext(
                 user_ctx=UserInfoAgentContext(
-                    user_memory=User(uid=str(uuid.uuid4())),
-                    bq_client=st.session_state.bq_client,
-                    table_name="chatbot_users_test"
+                    user_memory=User(uid=str(uuid.uuid4()))
                 ),
                 mechanic_ctx=MechanicAgentContext(
                     car_memory=UserCarDetails()
                 ),
                 booking_ctx=BookingAgentContext()
             )
-        st.session_state.agent = MechaniGoAgent(api_key=api_key, bq_client=st.session_state.bq_client, context=st.session_state.context)
+        st.session_state.agent = MechaniGoAgent(
+            api_key=api_key,
+            bq_client=st.session_state.bq_client,
+            table_name=TEST_TABLE_NAME,
+            context=st.session_state.context
+        )
 
     if st.button("Reset"):
         st.session_state.agent = None
