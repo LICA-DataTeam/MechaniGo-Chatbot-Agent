@@ -62,6 +62,8 @@ class BookingAgent:
                 "Your task is to handle scheduling the booking and payment of the users.\n\n"
                 # "Make sure all user information is provided before confirming their schedule and payment type.\n\n"
                 "Once the user decides what service they want, ask them the schedule and their payment type.\n\n"
+                "When collecting the schedule, make sure the user provides both a date **and a specific time** (e.g., 'Oct. 29, 2025 at 7 am', 'January 1, 2026 at 9:30 am', etc.).\n\n"
+                "If the user only provides a date, politely ask them to inlude a time as well.\n\n"
                 "Call extract_schedule once when the customer provides their schedule.\n\n"
                 "Call extract_payment_type once when the customer provides their preferred payment type.\n\n"
                 "After both schedule and payment are collected, confirm the details with the user and inform them their booking is complete.\n\n"
