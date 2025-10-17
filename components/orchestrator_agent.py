@@ -103,10 +103,14 @@ class MechaniGoAgent:
         user_sched_time = ctx.context.user_ctx.user_memory.schedule_time
         user_payment = ctx.context.user_ctx.user_memory.payment
         car = ctx.context.user_ctx.user_memory.car
+        user_contact = ctx.context.user_ctx.user_memory.contact_num
+        user_address = ctx.context.user_ctx.user_memory.address
 
         # Check completeness before setting display values
         self.logger.info("========== Verifying User Information ==========")
         has_user_info = user_name is not None and bool(user_name.strip())
+        has_user_contact = user_contact is not None and bool(user_contact.strip())
+        hass_address = user_address is not None and bool(user_address.strip())
         has_schedule = (
             user_sched_date is not None and bool(user_sched_date.strip()) and
             user_sched_time is not None and bool(user_sched_time.strip())
@@ -128,57 +132,86 @@ class MechaniGoAgent:
         self.logger.info(f"Complete: user={has_user_info}, car={has_car}, schedule={has_schedule}, payment={has_payment}")
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph, a business that offers home maintenance (PMS) and car-buying assistance.\n\n"
-            "You are the customer-facing agent which handles responding to customer inquiries.\n\n"
-            "CURRENT STATE:\n\n"
+            "You lead the customer through a 3-step service flow and only call sub-agents when needed.\n\n"
+            "BUSINESS FLOW (follow strictly in order):\n"
+            "1) Get an estimate/quote\n\n"
+            " - Understand what the car needs (diagnosis, maintenance, or car-buying help).\n"
+            " - If the user's name or contact number is missing, politely ask for them and, once provided,\n"
+            " call user_info_agent.ctx_extract_user_info(name=..., contact_num=...). Do not re-ask if saved.\n"
+            " - Ensure car details are known. If missing or ambiguous, call mechanic_agent to parse/collect car details.\n"
+            " - Provide a transparent, ballpark estimate and clarify it is subject to confirmation on site.\n"
+            " - If the user asks general questions, you may use faq_agent to answer, then return to the main flow.\n\n"
+            "2) Book an Appointment\n"
+            " - Ask for service location (home or office). Save it with user_info_agent if given.\n"
+            " - Ask for preferred date and time; when provided, call booking_agent.ctx_extract_sched to save schedule.\n"
+            " - Ask for preferred payment type (GCash, cash, credit); when provided, call booking_agent.ctx_extract_payment_type.\n"
+            " - Never re‑ask for details already in memory.\n\n"
+            "3) Expert Service at Your Door\n"
+            " - Confirm that a mobile mechanic will come equipped, perform the job efficiently, explain work, and take care of the car.\n"
+            " - Provide a clear confirmation summary (service need, car, location, date, time, payment).\n"
+            " - If the user requests changes, use the appropriate sub‑agent to update, then re‑confirm.\n\n"
+            "TOOLS AND WHEN TO USE THEM:\n"
+            "- user_info_agent:\n"
+            " - Use to extract/update user name, address, contact number.\n"
+            " - Use ctx_get_user_info if the user asks you to recall saved details.\n"
+            "- mechanic_agent:\n"
+            " - Use when car details are missing/ambiguous or the user changes car info.\n"
+            " - It can parse a free‑form car string into make/model/year and sync a car string into user memory.\n"
+            "- booking_agent:\n"
+            " - Use ctx_extract_sched right after the user gives schedule date/time.\n"
+            " - Use ctx_extract_payment_type right after the user gives payment preference.\n"
+            "- faq_agent:\n"
+            " - Use to answer official FAQs. Quote the official answer from the KB.\n"
+            " - After answering, continue the flow toward booking completion.\n\n"
+            "MEMORY AND COMPLETENESS:\n"
+            "- Before asking, check what's already in memory and avoid re‑asking.\n"
+            "- Drive toward completeness: once service need + car + location + schedule + payment are known, the booking is ready.\n\n"
+            "CURRENT STATE SNAPSHOT:\n"
+            f"- User: {display_name}\n"
+            f"- Contact: {user_contact or 'Not provided'}\n"
+            f"- Car: {display_car}\n"
+            f"- Location: {user_address or 'Not provided'}\n"
+            f"- Schedule: {display_sched_date} @{display_sched_time}\n"
+            f"- Payment: {display_payment}\n\n"
         )
 
-        if has_user_info:
-            prompt += f"- User: {display_name}\n"
-        else:
-            prompt += f"- User: not provided yet.\n"
+        missing = []
+        if not has_user_info:
+            missing.append("name")
+        if not has_car:
+            missing.append("car details")
+        if not has_user_contact:
+            missing.append("contact number")
+        if not hass_address:
+            missing.append("service location")
+        if not has_schedule:
+            missing.append("schedule (date/time)")
+        if not has_payment:
+            missing.append("payment method")
 
-        if has_car:
-            prompt += f"- Car: {display_car}\n"
-        else:
-            prompt += "- Car: not provided yet.\n"
-
-        if has_schedule:
-            prompt += f"- Schedule: {display_sched_date} @{display_sched_time}\n"
-        else:
-            prompt += "- Schedule: not provided yet.\n"
-
-        if has_payment:
-            prompt += f"- Payment: {display_payment}\n\n"
-        else:
-            prompt += f"- Payment: not provided yet.\n\n"
-
-        if has_user_info and has_schedule and has_payment and has_car:
+        if not missing:
             prompt += (
-                "All information is complete - Booking is ready!\n\n"
-                "If user confirms, simply acknowledge and thank them. DO NOT call any sub-agents again.\n\n"
-                "If user wants to modify something, use the appropriate sub-agent.\n\n"
-                "- You can still use faq_agent if the user has questions.\n\n"
-                "- Provide clear, friendly responses.\n\n"
+            "STATUS: All required information is complete — Booking is ready!\n\n"
+            "- Present a concise final confirmation of service need, car, location, date, time, and payment.\n"
+            "- Thank the user and avoid calling any sub‑agents unless they request changes.\n"
             )
         else:
+            prompt += "STATUS: Incomplete — still missing: " + ", ".join(missing) + ".\n\n"
             prompt += (
-                "Incomplete - the following information still needs to be collected:\n\n"
+            "NEXT‑ACTION POLICY:\n"
+            "- If missing name or contact → ask for them, then call user_info_agent.ctx_extract_user_info(name=..., contact_num=...).\n"
+            "- If missing car details → call mechanic_agent to extract/confirm car details (e.g., make/model/year).\n"
+            "- If missing service location → use user_info_agent to save the address.\n"
+            "- If missing schedule → after the user provides date/time, call booking_agent.ctx_extract_sched.\n"
+            "- If missing payment → after the user provides a method, call booking_agent.ctx_extract_payment_type.\n"
+            "- If the user asks FAQs at any point → use faq_agent, then resume this flow.\n\n"
+            "COMMUNICATION STYLE:\n"
+            "- Be friendly, concise, and proactive.\n"
+            "- Briefly explain what you are doing and why, especially after tool calls.\n"
+            "- Summarize updates after each tool call so the user knows what's saved.\n"
             )
 
-            if not has_user_info:
-                prompt += "- Use user_info_agent to collect user details (name, address, contact).\n"
-            if not has_car:
-                prompt += "- Use mechanic_agent to collect car information.\n"
-            if not has_schedule or not has_payment:
-                prompt += "- Use booking_agent to collect schedule and payment.\n"
 
-            prompt += (
-                "\nINSTRUCTIONS:\n"
-                "- Use the appropriate sub-agent to collect missing information.\n"
-                "- Provide clear and concise responses to the customer.\n"
-                "- Do not call sub-agents unnecessarily if the information is already saved.\n"
-                "- You can still use faq_agent if the user has questions.\n\n"
-            )
         self.logger.info("========== Orchestrator Agent Prompt ==========")
         print(prompt)
         return prompt
