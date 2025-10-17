@@ -81,6 +81,23 @@ class BigQueryClient:
             return User(**dict(row[0]))
         return None
 
+    def get_user_by_contact_num(self, table_name: str, contact_num: str) -> Optional[User]:
+        query = f"""
+        SELECT * FROM `{self.dataset_id}.{table_name}`
+        WHERE contact_num = @contact_num
+        LIMIT 1
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("contact_num", "STRING", contact_num)
+            ]
+        )
+        results = self.client.query(query, job_config=job_config).result()
+        rows = list(results)
+        if rows:
+            return User(**dict(rows[0]))
+        return None
+
     def upsert_user(self, table_name: str, user: User):
         user_dict = user.model_dump()
         table_id = f"{self.client.project}.{self.dataset_id}.{table_name}"
