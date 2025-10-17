@@ -126,10 +126,11 @@ class MechaniGoAgent:
 
         self.logger.info("========== DETAILS ==========")
         self.logger.info(f"User name: {display_name}")
+        self.logger.info(f"Contact: {user_contact}")
         self.logger.info(f"Car summary: {display_car}")
         self.logger.info(f"Schedule: {display_sched_date} @{display_sched_time}")
         self.logger.info(f"Payment: {display_payment}")
-        self.logger.info(f"Complete: user={has_user_info}, car={has_car}, schedule={has_schedule}, payment={has_payment}")
+        self.logger.info(f"Complete: user={has_user_info}, contact_num={has_user_contact}, car={has_car}, schedule={has_schedule}, payment={has_payment}")
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph, a business that offers home maintenance (PMS) and car-buying assistance.\n\n"
             "You lead the customer through a 3-step service flow and only call sub-agents when needed.\n\n"
@@ -217,11 +218,23 @@ class MechaniGoAgent:
         return prompt
 
     async def inquire(self, inquiry: str):
+        prev_contact = (self.context.user_ctx.user_memory.contact_num or "").strip()
         response = await Runner.run(
             starting_agent=self.agent,
             input=inquiry,
             context=self.context
         )
+
+        new_contact = (self.context.user_ctx.user_memory.contact_num or "").strip()
+        if new_contact and new_contact != prev_contact:
+            try:
+                linked = self.link_session_by_contact(new_contact)
+                if linked:
+                    self.logger.info(f"Session linked via contact: {new_contact}.")
+                else:
+                    self.logger.info(f"No existing user found for contact: {new_contact}.")
+            except Exception as e:
+                self.logger.error(f"Error linking by contact_num: {e}")
         self.save_user_state()
         return response.final_output
 
@@ -239,6 +252,36 @@ class MechaniGoAgent:
             self.logger.info("User saved to BigQuery successfully!")
         except Exception as e:
             self.logger.error(f"Error saving user information: {e}")
+
+    def link_session_by_contact(self, contact_num: str) -> bool:
+        try:
+            if not self.bq_client:
+                self.logger.warning("No BigQuery client set.")
+                self.context.user_ctx.user_memory.contact_num = contact_num
+                return False
+            
+            normalized = (contact_num or "").strip()
+            if not normalized:
+                self.logger.info("Empty contact provided; skipping link...")
+                return False
+
+            existing = self.bq_client.get_user_by_contact_num(self.table_name, contact_num=normalized)
+            if not existing:
+                self.logger.info(f"No existing user for contact: {normalized}")
+                self.context.user_ctx.user_memory.contact_num = normalized
+                return False
+
+            current = self.context.user_ctx.user_memory
+            if current and current.uid and existing.uid and current.uid != existing.uid:
+                self.logger.info(
+                    f"Switching session uid from {current.uid} to {existing.uid} (contact match)."
+                )
+            self.context.user_ctx.user_memory = existing
+            self.logger.info(f"Linked session to uid={existing.uid} for contact={normalized}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to link by contact: {e}")
+            return False
 
     def _ensure_users_table(self):
         self.logger.info("Ensuring dataset and table in BigQuery...")
