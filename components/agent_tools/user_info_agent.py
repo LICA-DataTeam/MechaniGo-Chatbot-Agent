@@ -91,16 +91,45 @@ class UserInfoAgent:
         car: Optional[str] = None
     ):
         user = ctx.context.user_ctx.user_memory
-        if name: user.name = name
-        if address: user.address = address
-        if contact_num: user.contact_num = contact_num
-        if schedule_date: user.schedule_date = schedule_date
-        if schedule_time: user.schedule_time = schedule_time
-        if payment: user.payment = payment
-        if car: user.car = car
+
+        def norm(x): return (x or "").strip()
+
+        incoming = {
+            "name": norm(name) or None,
+            "address": norm(address) or None,
+            "contact_num": norm(contact_num) or None,
+            "schedule_date": norm(schedule_date) or None,
+            "schedule_time": norm(schedule_time) or None,
+            "payment": norm(payment) or None,
+            "car": norm(car) or None
+        }
+        current = {
+            "name": norm(user.name) or None,
+            "address": norm(user.address) or None,
+            "contact_num": norm(user.contact_num) or None,
+            "schedule_date": norm(user.schedule_date) or None,
+            "schedule_time": norm(user.schedule_time) or None,
+            "payment": norm(user.payment) or None,
+            "car": norm(user.car) or None,
+        }
+
+        changed_fields = {}
+        for field, new_val in incoming.items():
+            if new_val is not None and new_val != current[field]:
+                setattr(user, field, new_val)
+                changed_fields[field] = new_val
+
+        if not changed_fields:
+            self.logger.info("========== _ctx_extract_user_info() ==========")
+            self.logger.info(f"User unchanged: {user}")
+            return {"status": "no_change", "message": "No updates needed.", "user": user}
 
         self.logger.info(f"Updated user memory: {user}")
-        return {"status": "updated", "user": user}
+        return {
+            "status": "updated",
+            "changed_fields": changed_fields,
+            "user": user
+        }
 
     def _ctx_get_user_info(self, ctx: RunContextWrapper[Any]):
         user = ctx.context.user_ctx.user_memory

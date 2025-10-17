@@ -133,6 +133,9 @@ class MechaniGoAgent:
         self.logger.info(f"Complete: user={has_user_info}, contact_num={has_user_contact}, car={has_car}, schedule={has_schedule}, payment={has_payment}")
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph, a business that offers home maintenance (PMS) and car-buying assistance.\n\n"
+            "FAQ HANDLING:\n"
+            " - If the user asks a general MechaniGo question (e.g., location, hours, pricing, services) — especially at the very start — immediately use faq_agent.search to answer.\n"
+            " - After responding, return to the service flow to gather or confirm the user’s details.\n\n"
             "You lead the customer through a 3-step service flow and only call sub-agents when needed.\n\n"
             "BUSINESS FLOW (follow strictly in order):\n"
             "1) Get an estimate/quote\n\n"
@@ -162,7 +165,7 @@ class MechaniGoAgent:
             " - Use ctx_extract_sched right after the user gives schedule date/time.\n"
             " - Use ctx_extract_payment_type right after the user gives payment preference.\n"
             "- faq_agent:\n"
-            " - Use to answer official FAQs. Quote the official answer from the KB.\n"
+            " - Use to answer official FAQs. Quote the official answer.\n"
             " - After answering, continue the flow toward booking completion.\n\n"
             "MEMORY AND COMPLETENESS:\n"
             "- Before asking, check what's already in memory and avoid re‑asking.\n"
@@ -206,6 +209,8 @@ class MechaniGoAgent:
             "- If missing schedule → after the user provides date/time, call booking_agent.ctx_extract_sched.\n"
             "- If missing payment → after the user provides a method, call booking_agent.ctx_extract_payment_type.\n"
             "- If the user asks FAQs at any point → use faq_agent, then resume this flow.\n\n"
+            "- Only call a sub-agent if it will capture missing information or update fields the user explicitly changed. "
+            "If a tool returns no_change, do not call it again this turn.\n"
             "COMMUNICATION STYLE:\n"
             "- Be friendly, concise, and proactive.\n"
             "- Briefly explain what you are doing and why, especially after tool calls.\n"
@@ -216,6 +221,22 @@ class MechaniGoAgent:
         self.logger.info("========== Orchestrator Agent Prompt ==========")
         print(prompt)
         return prompt
+
+    @staticmethod
+    def _complete_user_data(user: User) -> bool:
+        if not user or not user.uid:
+            return False
+        def filled(value: Optional[str]) -> bool:
+            return bool(value and value.strip())
+        return all([
+            filled(user.name),
+            filled(user.contact_num),
+            filled(user.address),
+            filled(user.schedule_date),
+            filled(user.schedule_time),
+            filled(user.payment),
+            filled(user.car)
+        ])
 
     async def inquire(self, inquiry: str):
         prev_contact = (self.context.user_ctx.user_memory.contact_num or "").strip()
@@ -235,7 +256,11 @@ class MechaniGoAgent:
                     self.logger.info(f"No existing user found for contact: {new_contact}.")
             except Exception as e:
                 self.logger.error(f"Error linking by contact_num: {e}")
-        self.save_user_state()
+        
+        if self._complete_user_data(self.context.user_ctx.user_memory):
+            self.save_user_state()
+        else:
+            self.logger.info("User profile still incomplete, skipping BigQuery save.")
         return response.final_output
 
     def save_user_state(self):

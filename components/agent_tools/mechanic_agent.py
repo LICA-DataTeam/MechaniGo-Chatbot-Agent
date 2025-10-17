@@ -118,24 +118,69 @@ class MechanicAgent:
         self.logger.info(f"Received: make={make}, model={model}, year={year}")
 
         car = ctx.context.mechanic_ctx.car_memory
-        if make: car.make = make
-        if model: car.model = model
-        if year:
-            try:
-                car.year = int(year) if isinstance(year, str) else year
-            except ValueError:
-                self.logger.warning(f"Invalid year format for vehicle: {year}")
-        if fuel_type: car.fuel_type = fuel_type
-        if transmission: car.transmission = transmission
+        
+        def norm_str(x): return (x or "").strip()
+        def norm_int_str(x):
+            if x is None:
+                return None
+            xs = str(x).strip()
+            return xs if xs.isdigit() else xs
 
+        incoming = {
+            "make": norm_str(make) or None,
+            "model": norm_str(model) or None,
+            "year": norm_int_str(year) or None,
+            "fuel_type": norm_str(fuel_type) or None,
+            "transmission": norm_str(transmission) or None
+        }
+
+        current = {
+            "make": norm_str(car.make) or None,
+            "model": norm_str(car.model) or None,
+            "year": str(car.year).strip() if car.year is not None else None,
+            "fuel_type": norm_str(car.fuel_type) or None,
+            "transmission": norm_str(car.transmission) or None
+        }
+
+        changed_fields = {}
+        if incoming["year"] is not None:
+            try:
+                incoming_year_int = int(incoming["year"])
+            except ValueError:
+                incoming_year_int = None
+        else:
+            incoming_year_int = None
+
+        if incoming["make"] is not None and incoming["make"] != current["make"]:
+            car.make = incoming["make"]; changed_fields["make"] = car.make
+        if incoming["model"] is not None and incoming["model"] != current["model"]:
+            car.model = incoming["model"]; changed_fields["model"] = car.model
+        if incoming_year_int is not None and str(incoming_year_int) != current["year"]:
+            car.year = incoming_year_int; changed_fields["year"] = car.year
+        if incoming["fuel_type"] is not None and incoming["fuel_type"] != current["fuel_type"]:
+            car.fuel_type = incoming["fuel_type"]; changed_fields["fuel_type"] = car.fuel_type
+        if incoming["transmission"] is not None and incoming["transmission"] != current["transmission"]:
+            car.transmission = incoming["transmission"]; changed_fields["transmission"] = car.transmission
+
+        if not changed_fields:
+            self.logger.info("========== _extract_car_info() ==========")
+            self.logger.info(f"Current car_memory: {car.model_dump()}")
+            return {
+                "status": "no_change",
+                "message": "Car details unchanged.",
+                "car_details": car.model_dump()
+            }
         self.logger.info(f"Updated user car details: {car}")
 
         if hasattr(ctx.context.user_ctx.user_memory, "car"):
             car_string = f"{car.year or ''} {car.make or ''} {car.model or ''}".strip()
             ctx.context.user_ctx.user_memory.car = car_string
             self.logger.info(f"Updated User.car string: '{car_string}'")
+
         return {
-            "status": "extracted",
+            "status": "success",
+            "changed_fields": changed_fields,
             "car_details": car.model_dump(),
-            "message": f"Please confirm if the following car details are correct: {car.model_dump()}"
+            "message": f"Updated car details: {changed_fields}. "
+                        f"Please confirm if these are correct."
         }

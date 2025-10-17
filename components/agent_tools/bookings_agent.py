@@ -91,7 +91,13 @@ class BookingAgent:
         user = ctx.context.user_ctx.user_memory
         prev_date, prev_time = user.schedule_date, user.schedule_time
 
-        if (schedule_date or "") == (prev_date or "") and (schedule_time or "") == (prev_time or ""):
+        def norm(x): return (x or "").strip()
+        new_date_n, new_time_n = norm(schedule_date), norm(schedule_time)
+        prev_date_n, prev_time_n = norm(prev_date), norm(prev_time)
+
+        first_set = (not prev_date_n and new_date_n) or (not prev_time_n and new_time_n)
+
+        if not first_set and new_date_n == prev_date_n and new_time_n == prev_time_n:
             self.logger.info("========== _extract_sched() No changes ==========")
             self.logger.info(f"User name: {user.name}")
             self.logger.info(f"Existing schedule unchanged: {prev_date} @{prev_time}")
@@ -99,18 +105,21 @@ class BookingAgent:
                 "status": "no_change",
                 "message": "Schedule already set to the same values."
             }
-        user.schedule_date = schedule_date
-        user.schedule_time = schedule_time
+        if schedule_date is not None:
+            user.schedule_date = schedule_date
+        if schedule_time is not None:
+            user.schedule_time = schedule_time
+
         self.logger.info("========== _extract_sched() Called! ==========")
         self.logger.info(f"User name: {user.name}")
-        if schedule_time or schedule_date:
-            self.logger.info(f"Date: {schedule_date} @{schedule_time}")
+        if user.schedule_time or user.schedule_date:
+            self.logger.info(f"Date: {user.schedule_date} @{user.schedule_time}")
         else:
             self.logger.info("No schedule yet!")
 
         return {
             "status": "success",
-            "message": f"Schedule saved: {schedule_date} at {schedule_time}"
+            "message": f"Schedule saved: {user.schedule_date} at {user.schedule_time}"
         }
 
     def _create_ctx_extract_payment_type(self):
@@ -131,7 +140,10 @@ class BookingAgent:
         prev_payment_norm = (user.payment or "").strip().lower()
         new_payment_norm = (payment or "").strip().lower()
 
-        if new_payment_norm and new_payment_norm == prev_payment_norm:
+        first_set = (not prev_payment_norm) and bool(new_payment_norm)
+        
+        if not first_set and new_payment_norm and new_payment_norm == prev_payment_norm:
+            ...
             self.logger.info("========== _extract_payment_type() No change ==========")
             self.logger.info(f"User name: {user.name}")
             self.logger.info(f"Payment unchanged: {user.payment}")
@@ -139,15 +151,17 @@ class BookingAgent:
                 "status": "no_change",
                 "message": "Payment method unchanged."
             }
-        user.payment = payment
+
+        if payment is not None:
+            user.payment = payment
         self.logger.info("========== _extract_payment_type() Called! ==========")
         self.logger.info(f"User name: {user.name}")
-        if payment:
-            self.logger.info(f"Payment Type: {payment}")
+        if user.payment:
+            self.logger.info(f"Payment Type: {user.payment}")
         else:
             self.logger.info("No payment yet!")
 
         return {
             "status": "success",
-            "message": f"Payment method saved: {payment}"
+            "message": f"Payment method saved: {user.payment}"
         }
