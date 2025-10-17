@@ -89,6 +89,16 @@ class BookingAgent:
         schedule_time: Optional[str] = None
     ):
         user = ctx.context.user_ctx.user_memory
+        prev_date, prev_time = user.schedule_date, user.schedule_time
+
+        if (schedule_date or "") == (prev_date or "") and (schedule_time or "") == (prev_time or ""):
+            self.logger.info("========== _extract_sched() No changes ==========")
+            self.logger.info(f"User name: {user.name}")
+            self.logger.info(f"Existing schedule unchanged: {prev_date} @{prev_time}")
+            return {
+                "status": "no_change",
+                "message": "Schedule already set to the same values."
+            }
         user.schedule_date = schedule_date
         user.schedule_time = schedule_time
         self.logger.info("========== _extract_sched() Called! ==========")
@@ -118,6 +128,17 @@ class BookingAgent:
         payment: Optional[str] = None
     ):
         user = ctx.context.user_ctx.user_memory
+        prev_payment_norm = (user.payment or "").strip().lower()
+        new_payment_norm = (payment or "").strip().lower()
+
+        if new_payment_norm and new_payment_norm == prev_payment_norm:
+            self.logger.info("========== _extract_payment_type() No change ==========")
+            self.logger.info(f"User name: {user.name}")
+            self.logger.info(f"Payment unchanged: {user.payment}")
+            return {
+                "status": "no_change",
+                "message": "Payment method unchanged."
+            }
         user.payment = payment
         self.logger.info("========== _extract_payment_type() Called! ==========")
         self.logger.info(f"User name: {user.name}")
