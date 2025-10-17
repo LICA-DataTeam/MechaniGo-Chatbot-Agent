@@ -57,16 +57,24 @@ class FAQAgent:
     def _ask(self, question: str):
         self.logger.info("========== _ask() Called! ==========")
 
-        client = OpenAI()
-        with open("vector_store_id.json") as f:
-            vector_store_id = json.load(f)["id"]
+        try:
+            client = OpenAI()
+            with open("vector_store_id.json") as f:
+                vector_store_id = json.load(f)["id"]
 
-        response = client.responses.create(
-            model=self.model,
-            input=question,
-            tools=[
-                {"type": "file_search", "vector_store_ids": [vector_store_id]}
-            ]
-        )
+            response = client.responses.create(
+                model=self.model,
+                input=question,
+                tools=[
+                    {"type": "file_search", "vector_store_ids": [vector_store_id]}
+                ],
+                max_tool_calls=5
+            )
 
-        return response.output_text
+            self.logger.info(f"'_ask()' output: {response.model_dump()}")
+            text = response.output_text or ""
+            if "issue retrieving" in text.lower():
+                self.logger.warning("FAQ fallback triggered; check vector store.")
+            return response.output_text
+        except Exception as e:
+            self.logging.error(f"Exception occurred while answering FAQs: {e}")
