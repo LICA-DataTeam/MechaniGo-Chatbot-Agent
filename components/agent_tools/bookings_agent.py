@@ -143,7 +143,6 @@ class BookingAgent:
         first_set = (not prev_payment_norm) and bool(new_payment_norm)
         
         if not first_set and new_payment_norm and new_payment_norm == prev_payment_norm:
-            ...
             self.logger.info("========== _extract_payment_type() No change ==========")
             self.logger.info(f"User name: {user.name}")
             self.logger.info(f"Payment unchanged: {user.payment}")
