@@ -62,11 +62,25 @@ class BookingAgent:
                 "Your task is to handle scheduling the booking and payment of the users.\n\n"
                 # "Make sure all user information is provided before confirming their schedule and payment type.\n\n"
                 "Once the user decides what service they want, ask them the schedule and their payment type.\n\n"
-                "When collecting the schedule, make sure the user provides both a date **and a specific time** (e.g., 'Oct. 29, 2025 at 7 am', 'January 1, 2026 at 9:30 am', etc.).\n\n"
-                "If the user only provides a date, politely ask them to inlude a time as well.\n\n"
                 "Call extract_schedule once when the customer provides their schedule.\n\n"
                 "Call extract_payment_type once when the customer provides their preferred payment type.\n\n"
+                "If the user gives both date and time, immediately call extract_schedule even if the time isn't perfectly worded.\n\n"
+                "When a user clarifies only one part (either date or time), reuse the other value from memory and call extract_schedule with both. Don't ask for the missing part again if it already exists in memory.\n\n"
+                "If neither date nor time is stored, ask the user to provide both in the same message.\n\n"
+                "Example: \n\n"
+                "User: 'My schedule is October 12, 2025 at around 10 am'.\n"
+                "Call extract_sched(schedule_date='October 12, 2025', schedule_time='10 am')\n\n"
+                "If you're not 100% sure about the date or time correctly, ask the user to restate both.\n\n"
+                "When calling extract_schedule, always pass the exact date/time strings the user just confirmed; do not infer or adjust them.\n\n"
+                "extract_schedule returns 'status': 'error' if you call it without both date and time (and no stored value yet). If you encounter that, immediately ask the user for both date and time.\n\n"
+                "When you already have a saved date or time, you can call extract_schedule with just the part the user is changing; the function reuses the stored value for the other part.\n\n"
+                "The only acceptable payment options are GCash, Cash, or Credit. If the user gives anything else or it's unclear, ask them to restate.\n\n"
+                "extract_payment_type returns 'status': 'error' when no payment value is provided; When you encounter this, ask the user again.\n\n"
                 "After both schedule and payment are collected, confirm the details with the user and inform them their booking is complete.\n\n"
+                "Example: \n\n"
+                "User: 'Book me on October 30 at 12 PM.'\n"
+                "User: 'Make it 1 PM instead'\n"
+                "- Call extract_schedule(schedule_date='October 30', schedule_time='1 PM')\n\n"
             )
         self.logger.info("========== BookingAgent prompt ==========")
         self.logger.info(prompt)
@@ -95,6 +109,20 @@ class BookingAgent:
         new_date_n, new_time_n = norm(schedule_date), norm(schedule_time)
         prev_date_n, prev_time_n = norm(prev_date), norm(prev_time)
 
+        if not prev_date_n and not new_date_n:
+            self.logger.info("========== _extract_sched() Missing date ==========")
+            return {
+                "status": "error",
+                "message": "No schedule date provided. Ask the user to restate both date and time."
+            }
+
+        if not prev_time_n and not new_time_n:
+            self.logger.info("========== _extract_sched() Missing time ==========")
+            return {
+                "status": "error",
+                "message": "No schedule time provided. Ask the user to restate both date and time."
+            }
+
         first_set = (not prev_date_n and new_date_n) or (not prev_time_n and new_time_n)
 
         if not first_set and new_date_n == prev_date_n and new_time_n == prev_time_n:
@@ -112,10 +140,7 @@ class BookingAgent:
 
         self.logger.info("========== _extract_sched() Called! ==========")
         self.logger.info(f"User name: {user.name}")
-        if user.schedule_time or user.schedule_date:
-            self.logger.info(f"Date: {user.schedule_date} @{user.schedule_time}")
-        else:
-            self.logger.info("No schedule yet!")
+        self.logger.info(f"Date: {user.schedule_date} @{user.schedule_time}")
 
         return {
             "status": "success",
@@ -140,9 +165,17 @@ class BookingAgent:
         prev_payment_norm = (user.payment or "").strip().lower()
         new_payment_norm = (payment or "").strip().lower()
 
+        if not new_payment_norm:
+            self.logger.info("========== _extract_payment_type() ==========")
+            self.logger.info(f"User name: {user.name}")
+            self.logger.info("No payment value provided.")
+            return {
+                "status": "error",
+                "message": "No payment method received. Please ask the user to specify GCash, Cash, or Credit."
+            }
+
         first_set = (not prev_payment_norm) and bool(new_payment_norm)
-        
-        if not first_set and new_payment_norm and new_payment_norm == prev_payment_norm:
+        if not first_set and new_payment_norm  == prev_payment_norm:
             self.logger.info("========== _extract_payment_type() No change ==========")
             self.logger.info(f"User name: {user.name}")
             self.logger.info(f"Payment unchanged: {user.payment}")
@@ -151,14 +184,10 @@ class BookingAgent:
                 "message": "Payment method unchanged."
             }
 
-        if payment is not None:
-            user.payment = payment
+        user.payment = payment
         self.logger.info("========== _extract_payment_type() Called! ==========")
         self.logger.info(f"User name: {user.name}")
-        if user.payment:
-            self.logger.info(f"Payment Type: {user.payment}")
-        else:
-            self.logger.info("No payment yet!")
+        self.logger.info(f"Payment Type: {user.payment}")
 
         return {
             "status": "success",
