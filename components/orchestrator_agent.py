@@ -37,7 +37,7 @@ class MechaniGoAgent:
         bq_client: BigQueryClient = None,
         table_name: str = "chatbot_users_test",
         name: str = "MechaniGo Bot",
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4.1",
         context: Optional[MechaniGoContext] = None
     ):
         self.logger = logging.getLogger(__name__)
@@ -212,8 +212,10 @@ class MechaniGoAgent:
             "- Only call a sub-agent if it will capture missing information or update fields the user explicitly changed. "
             "If a tool returns no_change, do not call it again this turn.\n"
             "COMMUNICATION STYLE:\n"
+            "- Always introduce yourself to customers cheerfully and politely.\n"
             "- Be friendly, concise, and proactive.\n"
-            "- Briefly explain what you are doing and why, especially after tool calls.\n"
+            "- The customer may speak in English, Filipino, or a mix of both. Expect typos and slang.\n"
+            "- Use a mix of casual and friendly Tagalog and English as appropriate in a cheerful and polite conversational tone, occasionally using 'po' to show respect, regardless of the customer's language.\n"
             "- Summarize updates after each tool call so the user knows what's saved.\n"
             )
 
