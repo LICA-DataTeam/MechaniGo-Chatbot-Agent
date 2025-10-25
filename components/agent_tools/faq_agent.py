@@ -25,7 +25,7 @@ class FAQAgent:
         self.description = "Handles FAQs for MechaniGo.ph."
 
         load_dotenv()
-        self.vector_store_id = os.getenv("VECTOR_STORE_ID")
+        self.vector_store_id = os.getenv("FAQ_VECTOR_STORE_ID")
 
         ask = self._create_ask()
         self.agent = create_agent(

@@ -1,10 +1,13 @@
 from agents import Agent, RunContextWrapper, function_tool
 from components.utils import create_agent
 from schemas import UserCarDetails
+from urllib.parse import urlparse
 from typing import Optional, Any
+from dotenv import load_dotenv
 from pydantic import BaseModel
-import traceback
+from openai import OpenAI
 import logging
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,9 +32,14 @@ class MechanicAgent:
         self.name = name
         self.model = model
         self.description = "Handles car related inquiries."
+        self.openai_client = OpenAI(api_key=self.api_key)
         self.logger = logging.getLogger(__name__)
 
         extract_car_info = self._create_extract_car_info()
+        lookup = self._create_lookup()
+
+        load_dotenv()
+        self.vector_store_id = os.getenv("MECHANIC_VECTOR_STORE_ID")
 
         self.agent = create_agent(
             api_key=self.api_key,
@@ -39,7 +47,7 @@ class MechanicAgent:
             handoff_description=self.description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[extract_car_info]
+            tools=[extract_car_info, lookup]
         )
 
     @property
@@ -48,6 +56,23 @@ class MechanicAgent:
             tool_name=self.name,
             tool_description=self.description
         )
+
+    @staticmethod
+    def domain_extract(response: dict, target_domain: str):
+        used_domains = set()
+
+        for i in response.get("output", []):
+            if i.get("type") == "message":
+                for content_block in i.get("content", []):
+                    annotations = content_block.get("annotations", [])
+                    for annotation in annotations:
+                        if annotation.get("type") == "url_citation":
+                            url = annotation.get("url")
+                            if url:
+                                parsed = urlparse(url)
+                                domain = parsed.netloc.replace("www", "")
+                                used_domains.add(domain)
+        return target_domain in used_domains, used_domains
 
     def _dynamic_instructions(
         self,
@@ -63,9 +88,11 @@ class MechanicAgent:
             f"User's car details: {car_details}\n\n"
             "You can help with: \n"
             "- Car diagnosis and troubleshooting\n"
+            "- When the customer asks about car diagnosis and troubleshooting, you can use `lookup` tool to answer their inquiries. Always cite your answers.\n"
             "- Maintenance recommendations\n"
-            "- Updating car details if user provides new information\n\n"
-            "If user mentions different car details, call extract_car_info to update.\n"
+            "- Updating car details if user provides new information.\n"
+            "- If user mentions different car details, call extract_car_info to update.\n"
+            "- After extracting, summarize and ask for their confirmation.\n"
         )
         return prompt
 
@@ -83,6 +110,12 @@ class MechanicAgent:
                 ctx, make, model, year, fuel_type, transmission
             )
         return extract_car_info
+
+    def _create_lookup(self):
+        @function_tool
+        def lookup(question: str):
+            return None
+        return lookup
 
     def _extract_car_info(
         self,
@@ -152,3 +185,57 @@ class MechanicAgent:
             "message": f"Updated car details: {changed_fields}. "
                         f"Please confirm if these are correct."
         }
+
+    def _lookup(self, question: str):
+        # MechanicAgent's tool for car-diagnosis and troubleshooting.
+        # Prefers vector store (file_search) ONLY IF it is configured and indexed.
+        # To configure vector store -> components/utils/file_search_utils.py
+        # Fallback: web_search
+        self.logger.info("========== _lookup() called ==========")
+        domain = "mechanigo.ph"
+
+        try:
+            if getattr(self, "vector_store_id", None):
+                try:
+                    self.logger.info("Using mechanic knowledge base vector store via file_search...")
+                    response = self.openai_client.responses.create(
+                        model="gpt-4.1",
+                        input=question,
+                        tools=[{"type": "file_search", "vector_store_ids": [self.vector_store_id]}],
+                        max_tool_calls=3,
+                        temperature=0
+                    )
+                    return {
+                        "status": "success",
+                        "source": "vector_store",
+                        "answer": (response.output_text or "").strip()
+                    }
+                except Exception as e:
+                    self.logger.error(f"Vector store lookup failed: {e}. Using web_search...")
+            try:
+                input = [
+                    {"role": "system", "content": "You are an assistant that answers car diagnosis and troubleshooting. Always cite your answers."},
+                    {"role": "user", "content": question}
+                ]
+                response = self.openai_client.responses.create(
+                    model="gpt-5",
+                    input=input,
+                    tools=[{"type": "web_search", "filters": {"allowed_domains": [domain]}}],
+                    tool_choice="auto",
+                    include=["web_search_call.action.sources"]
+                )
+                _, domains = MechanicAgent.domain_extract(response.model_dump(), domain)
+                return {
+                    "status": "success",
+                    "source": "web_search",
+                    "answer": (response.output_text or "").strip(),
+                    "citations": domains
+                }
+            except Exception as e:
+                return {"status": "error", "message": "web_search failed."}
+        except Exception as e:
+            self.logger.error(f"Exception occurred while web searching: {e}")
+            return {
+                "status": "error",
+                "message": "Exception occurred. Error retrieving FAQ answer."
+            }
