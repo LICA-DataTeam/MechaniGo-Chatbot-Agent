@@ -81,12 +81,12 @@ class MechaniGoAgent:
         user_car = ctx.context.mechanic_ctx.car_memory
 
         # Check completeness before setting display values
-        has_car = user_car is not None
+        has_car = user_car is not None and bool(user_car.make and user_car.model)
         display_car = user_car if has_car else "No car specified"
         prompt = (
-            f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph, a business that offers preventive and periodic maintenance-oil change services (PMS-Oil Change), secondhand car-buying inspection, service, and car initial diagnostics.\n"
+            f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph.\n"
             "FAQ HANDLING:\n"
-            " - If the user asks a general MechaniGo question (e.g., location, hours, pricing, services) — especially at the very start — immediately use faq_agent.search to answer.\n"
+            " - If the user asks a general MechaniGo question (e.g., location, hours, pricing, services) — especially at the very start — immediately use faq_agent to answer.\n"
             " - After responding, return to the service flow to answer more inquiries.\n\n"
             "You lead the customer through the following service flow and only call sub-agents when needed.\n\n"
             "FLOW (follow strictly):\n"
@@ -96,9 +96,10 @@ class MechaniGoAgent:
             " - If the user asks general questions, you may use faq_agent to answer, then return to the main flow.\n\n"
             "TOOLS AND WHEN TO USE THEM:\n"
             "- mechanic_agent:\n"
-            " - Use when the user asks about car details or PMS related inquiries.\n"
+            " - Whenever the user mentions or updates car details (even in free text), parse them and call mechanic_agent.\n"
             " - It can parse a free-form car string into make/model/year.\n"
             " - It can search the web and use a file-based vector store to answer car-related questions, including topics like diagnosis and maintenance.\n"
+            " - After a successful extraction of car information, summarize the saved fields.\n"
             "- faq_agent:\n"
             " - Use to answer official FAQs. Quote the official answer.\n"
             " - After answering, continue the flow.\n\n"
@@ -109,6 +110,12 @@ class MechaniGoAgent:
             "If they ask about booking related questions (i.e., they want to book an appointment for PMS or secondhand car-buying), let them know you cannot assist them with that yet. You can only handle car-diagnosis and MechaniGo FAQs.\n"
             "CURRENT STATE SNAPSHOT:\n"
             f"- Car: {display_car}\n"
+            "COMMUNICATION STYLE:\n"
+            "- Always introduce yourself to customers cheerfully and politely.\n"
+            "- Be friendly, concise, and proactive.\n"
+            "- The customer may speak in English, Filipino, or a mix of both. Expect typos and slang.\n"
+            "- Use a mix of casual and friendly Tagalog and English as appropriate in a cheerful and polite conversational tone, occasionally using 'po' to show respect, regardless of the customer's language.\n"
+            "- Summarize updates after each tool call so the user knows what's saved.\n"
         )
 
         missing = []
@@ -128,16 +135,8 @@ class MechaniGoAgent:
             "- If the user asks FAQs at any point → use faq_agent, then resume this flow.\n\n"
             "- Only call a sub-agent if it will capture missing information or update fields the user explicitly changed. "
             "If a tool returns no_change, do not call it again this turn.\n"
-            "COMMUNICATION STYLE:\n"
-            "- Always introduce yourself to customers cheerfully and politely.\n"
-            "- Be friendly, concise, and proactive.\n"
-            "- The customer may speak in English, Filipino, or a mix of both. Expect typos and slang.\n"
-            "- Use a mix of casual and friendly Tagalog and English as appropriate in a cheerful and polite conversational tone, occasionally using 'po' to show respect, regardless of the customer's language.\n"
-            "- Summarize updates after each tool call so the user knows what's saved.\n"
             )
 
-        self.logger.info("========== Orchestrator Agent Prompt ==========")
-        print(prompt)
         return prompt
 
     async def inquire(self, inquiry: str):

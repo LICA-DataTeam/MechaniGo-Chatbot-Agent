@@ -54,40 +54,19 @@ class MechanicAgent:
         ctx: RunContextWrapper[Any],
         agent: Agent
     ):
-        user_car_string = getattr(ctx.context.user_ctx.user_memory, "car", None)
         car = ctx.context.mechanic_ctx.car_memory
-        self.logger.info(f"User.car string: {user_car_string}")
         self.logger.info(f"Current car_memory: {car.model_dump()}")
         
-        needs_parsing = user_car_string and not (car.make and car.model)
-        if needs_parsing:
-            prompt = (
-                f"You are {agent.name}, a car mechanic sub-agent.\n\n"
-                f"IMPORTANT: The user has provided the following car description: '{user_car_string}'\n\n"
-                "However, this needs to be converted into structured details.\n\n"
-                "Your task: \n"
-                "1. Parse the car description into make, model, year, fuel_type, and transmission\n\n"
-                "2. Call extract_car_info with the parsed details.\n\n"
-                "Examples:\n"
-                "- 'Toyota AE86' -> extract_car_info(make='Toyota', model='AE86')\n"
-                "- 'Ford Fiesta' -> extract_car_info(make='Ford', model='Fiesta')\n"
-                "Your other tasks:\n\n"
-                "- Car diagnosis and troubleshooting\n"
-                "- Maintenance recommendations\n"
-                "- Updating car details if user provides new information\n\n"
-                "After extracting, ask for confirmation.\n\n"
-            )
-        else:
-            car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}".strip()
-            prompt = (
-                f"You are {agent.name}, a car mechanic sub-agent.\n\n"
-                f"User's car details: {car_details}\n\n"
-                "You can help with: \n"
-                "- Car diagnosis and troubleshooting\n"
-                "- Maintenance recommendations\n"
-                "- Updating car details if user provides new information\n\n"
-                "If user mentions different car details, call extract_car_info to update.\n"
-            )
+        car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}".strip()
+        prompt = (
+            f"You are {agent.name}, a car mechanic sub-agent.\n\n"
+            f"User's car details: {car_details}\n\n"
+            "You can help with: \n"
+            "- Car diagnosis and troubleshooting\n"
+            "- Maintenance recommendations\n"
+            "- Updating car details if user provides new information\n\n"
+            "If user mentions different car details, call extract_car_info to update.\n"
+        )
         return prompt
 
     def _create_extract_car_info(self):
@@ -123,8 +102,10 @@ class MechanicAgent:
         def norm_int_str(x):
             if x is None:
                 return None
-            xs = str(x).strip()
-            return xs if xs.isdigit() else xs
+            try:
+                return int(str(x).strip())
+            except (ValueError, TypeError):
+                return None
 
         incoming = {
             "make": norm_str(make) or None,
@@ -137,26 +118,18 @@ class MechanicAgent:
         current = {
             "make": norm_str(car.make) or None,
             "model": norm_str(car.model) or None,
-            "year": str(car.year).strip() if car.year is not None else None,
+            "year": car.year if isinstance(car.year, int) else norm_int_str(car.year),
             "fuel_type": norm_str(car.fuel_type) or None,
             "transmission": norm_str(car.transmission) or None
         }
 
         changed_fields = {}
-        if incoming["year"] is not None:
-            try:
-                incoming_year_int = int(incoming["year"])
-            except ValueError:
-                incoming_year_int = None
-        else:
-            incoming_year_int = None
-
         if incoming["make"] is not None and incoming["make"] != current["make"]:
             car.make = incoming["make"]; changed_fields["make"] = car.make
         if incoming["model"] is not None and incoming["model"] != current["model"]:
             car.model = incoming["model"]; changed_fields["model"] = car.model
-        if incoming_year_int is not None and str(incoming_year_int) != current["year"]:
-            car.year = incoming_year_int; changed_fields["year"] = car.year
+        if incoming["year"] is not None and incoming["year"] != current["year"]:
+            car.year = incoming["year"]; changed_fields["year"] = car.year
         if incoming["fuel_type"] is not None and incoming["fuel_type"] != current["fuel_type"]:
             car.fuel_type = incoming["fuel_type"]; changed_fields["fuel_type"] = car.fuel_type
         if incoming["transmission"] is not None and incoming["transmission"] != current["transmission"]:
@@ -171,11 +144,6 @@ class MechanicAgent:
                 "car_details": car.model_dump()
             }
         self.logger.info(f"Updated user car details: {car}")
-
-        if hasattr(ctx.context.user_ctx.user_memory, "car"):
-            car_string = f"{car.year or ''} {car.make or ''} {car.model or ''}".strip()
-            ctx.context.user_ctx.user_memory.car = car_string
-            self.logger.info(f"Updated User.car string: '{car_string}'")
 
         return {
             "status": "success",
