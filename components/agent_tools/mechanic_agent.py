@@ -20,6 +20,65 @@ class MechanicAgentContext(BaseModel):
         "arbitrary_types_allowed": True
     }
 
+class PMSAgent:
+    """Expert at handling inquiries about PMS related questions."""
+    def __init__(
+        self,
+        api_key: str,
+        name: str = "pms_agent",
+        model: str = "gpt-4.1"
+    ):
+        self.logger = logging.getLogger(__name__)
+        self.api_key = api_key
+        self.name = name
+        self.model = model
+        self.description = "An expert at Preventive and Periodic Maintenance-Oil Change Services."
+
+        self.agent = create_agent(
+            api_key=self.api_key,
+            name=self.name,
+            handoff_description=self.description,
+            instructions=self._dynamic_instructions,
+            model=self.model
+        )
+
+    @property
+    def as_tool(self):
+        return self.agent.as_tool(
+            tool_name=self.name,
+            tool_description=self.description
+        )
+
+    def _dynamic_instructions(
+        self,
+        ctx: RunContextWrapper[Any],
+        agent: Agent
+    ):
+        mechanic_ctx = getattr(ctx.context, "mechanic_ctx", None)
+        car = getattr(mechanic_ctx or ctx.context, "car_memory", None) or UserCarDetails()
+        car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}".strip()
+        self.logger.info("========== pms_agent instructions ==========")
+        print(f"car: {car_details}")
+        instructions = (
+            f"You are {agent.name}, an expert in Preventive and Periodic Maintenance Service (PMS).\n\n"
+            f"The user owns a {car_details}.\n"
+            f"Your role is to provide authoritative, accurate, and practical information about this car's preventive maintenance.\n\n"
+            "Your expertise includes:\n"
+            "- Explaining what PMS is and why it is important for car longevity and safety.\n"
+            "- Recommending service intervals (e.g., every 5,000 or 10,000 km, or every 6 months) depending on the manufacturer and driving habits.\n"
+            "- Detailing what tasks are done at each PMS stage: oil and filter changes, fluid checks, brake inspection, tire rotation, etc.\n"
+            "- Advising the user on what to expect during a PMS visit — cost, duration, and checklist.\n"
+            "- Suggesting appropriate fluids, filters, spark plugs, or other consumables based on the car's make and year.\n"
+            "- Warning about consequences of missed or delayed PMS (e.g., voided warranty, reduced engine performance, or safety risks).\n"
+            "- Comparing dealership vs third-party PMS options when asked.\n\n"
+            "When answering:\n"
+            "- Always ground your explanations in preventive maintenance context.\n"
+            "- If the user asks a troubleshooting question (symptom, noise, malfunction), clarify that PMS is for *scheduled maintenance*, not repair diagnosis.\n"
+            "- If needed, suggest the user ask the main MechanicAgent for troubleshooting help.\n"
+            "- Keep answers concise, practical, and formatted for clarity (lists, steps, or tables when helpful).\n"
+        )
+        return instructions
+
 class MechanicAgent:
     """Handles all car related inquiries."""
     def __init__(
@@ -41,13 +100,17 @@ class MechanicAgent:
         load_dotenv()
         self.vector_store_id = os.getenv("MECHANIC_VECTOR_STORE_ID")
 
+        pms_agent = PMSAgent(
+            api_key=self.api_key
+        )
+
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[extract_car_info, lookup]
+            tools=[extract_car_info, lookup, pms_agent.as_tool]
         )
 
     @property
@@ -80,20 +143,45 @@ class MechanicAgent:
         agent: Agent
     ):
         car = ctx.context.mechanic_ctx.car_memory
-        self.logger.info(f"Current car_memory: {car.model_dump()}")
-        
         car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}".strip()
+
+        missing_fields = []
+        if not (car.make or "").strip():
+            missing_fields.append("make")
+        if not (car.model or "").strip():
+            missing_fields.append("model")
+        if not car.year:
+            missing_fields.append("year")
+
         prompt = (
             f"You are {agent.name}, a car mechanic sub-agent.\n\n"
-            f"User's car details: {car_details}\n\n"
-            "You can help with: \n"
-            "- Car diagnosis and troubleshooting\n"
-            "- When the customer asks about car diagnosis and troubleshooting, you can use `lookup` tool to answer their inquiries. Always cite your answers.\n"
-            "- Maintenance recommendations\n"
-            "- Updating car details if user provides new information.\n"
-            "- If user mentions different car details, call extract_car_info to update.\n"
-            "- After extracting, summarize and ask for their confirmation.\n"
+            f"User's car deatils in memory: {car_details}\n\n"
+            "CRITICAL RULES:\n"
+            "1. If this turn contains ANY car information and memory is missing make or model, call extract_car_info first before replying or using other tools.\n"
+            "2. When calling extract_car_info, pass every car field mentioned in the current turn (make, model, year, fuel type, transmission).\n"
+            "3. After extract_car_info returns success, acknowledge what changed and ask the user to confirm.\n"
+            "4. Use lookup for troubleshooting or general maintenance questions, citing sources.\n"
+            "5. Use pms_agent strictly for Preventive/Periodic Maintenance Service (PMS) questions (intervals, checklists, consumables, etc.).\n\n"
+            "TOOLS AND WHEN TO USE THEM:\n"
+            "- extract_car_info: whenever the user states or updates car details.\n"
+            "- lookup: diagnosis, troubleshooting, or non-PMS maintenance questions.\n"
+            "- pms_agent: PMS intervals, schedules, tasks, or consumables.\n"
         )
+
+        if missing_fields:
+            prompt += (
+                "\nNEXT-ACTION:\n"
+                f"- Car memory still missing: {', '.join(missing_fields)}.\n"
+                "- IMMEDIATELY call extract_car_info with any car info from the current turn.\n"
+                "- Do not call pms_agent or lookup, and do not answer, until extract_car_info returns success.\n"
+            )
+        else:
+            prompt += (
+                "\nNEXT-ACTION:\n"
+                "- Car details complete. Continue assisting.\n"
+                "- For PMS questions, prefer pms_agent and summarize the answer for the user.\n"
+                "- For troubleshooting or general maintenance questions, call lookup and cite your sources.\n"
+            )
         return prompt
 
     def _create_extract_car_info(self):
@@ -114,7 +202,7 @@ class MechanicAgent:
     def _create_lookup(self):
         @function_tool
         def lookup(question: str):
-            return None
+            return self._lookup(question)
         return lookup
 
     def _extract_car_info(
