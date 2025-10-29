@@ -5,8 +5,8 @@
 # - file search: car-diagnosis (cms blog post - vector store)
 # FAQAgent
 # - file search: vector store (faqs.json)
+from agents import Agent, Runner, RunContextWrapper, SQLiteSession
 from config import DEFAULT_AGENT_HANDOFF_DESCRIPTION
-from agents import Agent, Runner, RunContextWrapper
 from components.agent_tools import (
     MechanicAgent, MechanicAgentContext,
     FAQAgent
@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from typing import Optional
 import openai
 import logging
+import uuid
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,6 +46,7 @@ class MechaniGoAgent:
         
         self.name = name
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
+        self.session = SQLiteSession(session_id=str(uuid.uuid4()), db_path="conversations.db")
         self.model = model
 
         if not context:
@@ -88,12 +90,6 @@ class MechaniGoAgent:
             "FAQ HANDLING:\n"
             " - If the user asks a general MechaniGo question (e.g., location, hours, pricing, services) — especially at the very start — immediately use faq_agent to answer.\n"
             " - After responding, return to the service flow to answer more inquiries.\n\n"
-            "You lead the customer through the following service flow and only call sub-agents when needed.\n\n"
-            "FLOW (follow strictly):\n"
-            "1) PMS service\n\n"
-            " - Understand what the car needs (diagnosis, or maintenance).\n"
-            " - Ensure car details are known. If missing or ambiguous, call mechanic_agent to parse/collect car details.\n"
-            " - If the user asks general questions, you may use faq_agent to answer, then return to the main flow.\n\n"
             "TOOLS AND WHEN TO USE THEM:\n"
             "- mechanic_agent:\n"
             " - Whenever the user mentions any car details in the conversation (e.g., 'What is wrong with my 2020 Honda Civic?')\n"
@@ -101,11 +97,21 @@ class MechaniGoAgent:
             " - It can parse a free-form car string into make/model/year.\n"
             " - It can search the web and use a file-based vector store to answer car-related questions, including topics like diagnosis and maintenance.\n"
             " - After a successful extraction of car information, summarize the saved fields.\n"
+            " - **Do not reset the topic** or ask what they want to ask again if an issue was already provided earlier.\n"
+            "   - Example:\n"
+            "       - User: 'My aircon is getting warmer.'\n"
+            "       - You: 'Can I get your car details?'\n"
+            "       - User: 'Ford Everest 2015.'\n"
+            "       - After mechanic_agent returns car info, respond like: 'Got it—Ford Everest 2015. Since you mentioned your aircon is getting warmer, here’s what we can check…'\n"
             "- faq_agent:\n"
             " - Use to answer official FAQs. Quote the official answer.\n"
             " - After answering, continue the flow.\n\n"
             "MEMORY AND COMPLETENESS:\n"
             " - Check what's already in memory and avoid re-asking.\n"
+            " - Always retain and reference the customer’s last described problem or issue (e.g., 'engine light on', 'aircon not cooling', 'strange noise').\n"
+            " - If the user provides missing information (like car details), **return to and continue discussing the original issue** afterward.\n"
+            " - Check what's already in memory and avoid re-asking questions unnecessarily.\n"
+            " - Maintain continuity between tool calls. The customer should feel like the conversation flows naturally without restarting.\n\n"
             "SCOPE:\n"
             "Currently, you only handle two agents: mechanic_agent and faq_agent. You only need to answer a customer's general inquiries about MechaniGo (FAQs) and car-related questions (e.g., PMS, diagnosis and troubleshooting).\n"
             "If they ask about booking related questions (i.e., they want to book an appointment for PMS or secondhand car-buying), let them know you cannot assist them with that yet. You can only handle car-diagnosis and MechaniGo FAQs.\n"
@@ -144,6 +150,7 @@ class MechaniGoAgent:
         response = await Runner.run(
             starting_agent=self.agent,
             input=inquiry,
-            context=self.context
+            context=self.context,
+            session=self.session
         )
         return response.final_output
