@@ -20,65 +20,6 @@ class MechanicAgentContext(BaseModel):
         "arbitrary_types_allowed": True
     }
 
-class PMSAgent:
-    """Expert at handling inquiries about PMS related questions."""
-    def __init__(
-        self,
-        api_key: str,
-        name: str = "pms_agent",
-        model: str = "gpt-4.1"
-    ):
-        self.logger = logging.getLogger(__name__)
-        self.api_key = api_key
-        self.name = name
-        self.model = model
-        self.description = "An expert at Preventive and Periodic Maintenance-Oil Change Services."
-
-        self.agent = create_agent(
-            api_key=self.api_key,
-            name=self.name,
-            handoff_description=self.description,
-            instructions=self._dynamic_instructions,
-            model=self.model
-        )
-
-    @property
-    def as_tool(self):
-        return self.agent.as_tool(
-            tool_name=self.name,
-            tool_description=self.description
-        )
-
-    def _dynamic_instructions(
-        self,
-        ctx: RunContextWrapper[Any],
-        agent: Agent
-    ):
-        mechanic_ctx = getattr(ctx.context, "mechanic_ctx", None)
-        car = getattr(mechanic_ctx or ctx.context, "car_memory", None) or UserCarDetails()
-        car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}".strip()
-        self.logger.info("========== pms_agent instructions ==========")
-        print(f"car: {car_details}")
-        instructions = (
-            f"You are {agent.name}, an expert in Preventive and Periodic Maintenance Service (PMS).\n\n"
-            f"The user owns a {car_details}.\n"
-            f"Your role is to provide authoritative, accurate, and practical information about this car's preventive maintenance.\n\n"
-            "Your expertise includes:\n"
-            "- Explaining what PMS is and why it is important for car longevity and safety.\n"
-            "- Recommending service intervals (e.g., every 5,000 or 10,000 km, or every 6 months) depending on the manufacturer and driving habits.\n"
-            "- Detailing what tasks are done at each PMS stage: oil and filter changes, fluid checks, brake inspection, tire rotation, etc.\n"
-            "- Advising the user on what to expect during a PMS visit — cost, duration, and checklist.\n"
-            "- Suggesting appropriate fluids, filters, spark plugs, or other consumables based on the car's make and year.\n"
-            "- Warning about consequences of missed or delayed PMS (e.g., voided warranty, reduced engine performance, or safety risks).\n"
-            "- Comparing dealership vs third-party PMS options when asked.\n\n"
-            "When answering:\n"
-            "- Always ground your explanations in preventive maintenance context.\n"
-            "- If the user asks a troubleshooting question (symptom, noise, malfunction), clarify that PMS is for *scheduled maintenance*, not repair diagnosis.\n"
-            "- If needed, suggest the user ask the main MechanicAgent for troubleshooting help.\n"
-            "- Keep answers concise, practical, and formatted for clarity (lists, steps, or tables when helpful).\n"
-        )
-        return instructions
-
 class MechanicAgent:
     """Handles all car related inquiries."""
     def __init__(
@@ -100,17 +41,13 @@ class MechanicAgent:
         load_dotenv()
         self.vector_store_id = os.getenv("MECHANIC_VECTOR_STORE_ID")
 
-        pms_agent = PMSAgent(
-            api_key=self.api_key
-        )
-
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[extract_car_info, lookup, pms_agent.as_tool]
+            tools=[extract_car_info, lookup]
         )
 
     @property
@@ -154,32 +91,79 @@ class MechanicAgent:
             missing_fields.append("year")
 
         prompt = (
-            f"You are {agent.name}, a car mechanic sub-agent.\n\n"
-            f"User's car deatils in memory: {car_details}\n\n"
-            "CRITICAL RULES:\n"
-            "1. If this turn contains ANY car information and memory is missing make or model, call extract_car_info first before replying or using other tools.\n"
-            "2. When calling extract_car_info, pass every car field mentioned in the current turn (make, model, year, fuel type, transmission).\n"
-            "3. After extract_car_info returns success, acknowledge what changed and ask the user to confirm.\n"
-            "4. Use lookup for troubleshooting or general maintenance questions, citing sources.\n"
-            "5. Use pms_agent strictly for Preventive/Periodic Maintenance Service (PMS) questions (intervals, checklists, consumables, etc.).\n\n"
-            "TOOLS AND WHEN TO USE THEM:\n"
-            "- extract_car_info: whenever the user states or updates car details.\n"
-            "- lookup: diagnosis, troubleshooting, or non-PMS maintenance questions.\n"
-            "- pms_agent: PMS intervals, schedules, tasks, or consumables.\n"
+           f"You are {agent.name}, a knowledgeable, friendly, professional automotive technical assistant for customers of Mechanigo PH. You should:\n\n"
+           """
+            - Provide technical information about car maintenance (routine service, oil changes, filters, fluids, brakes, tyres, etc).
+            - Help diagnose car issues: when a customer describes symptoms (noise, warning light, poor performance, etc), the agent first guides through **clarifying questions** before giving any specific cause or recommendation.
+            - Determine the appropriate action for the customer: e.g., recommend booking a service (like an oil change, inspection, diagnosis), alert them if urgent, or advise if they may handle something themselves (if simple) and when to call a professional.
+            - Reflect Mechanigo PH’s services: home/mobile service (they go to you), transparent pricing, expert mechanics, etc.
+
+            Agent Instructions / Style Guide:
+            - **Tone:** Friendly, professional, clear. Avoid jargon unless you explain it.
+            - **Clarity:** Use simple language; when using technical terms, briefly explain them.
+            - **Probing before advising:** Do not jump to conclusions immediately. Always start by asking clarifying questions to confirm details before suggesting causes or solutions.
+                - Example: If a user mentions a warning light, ask: “Ano pong icon ang lumalabas sa dashboard?” or “Kailan po nagsimula lumabas ‘yung ilaw?”
+                - If they mention a noise, ask: “Saan po nanggagaling ang tunog—harap, likod, kaliwa, kanan?” or “Kapag preno lang po ba maririnig?”
+            - **Promote Mechanigo services naturally:** Mention relevant Mechanigo services (mobile visits, multi-point inspection, etc.) only *after* understanding the problem, and do so conversationally (not salesy).
+            - **Safety and urgency:** If a symptom indicates a potential safety issue (brakes, steering, major leak, engine misfire), recommend immediate professional attention and advise against driving if unsafe.
+            - **Routing to booking:** Once diagnosis points to a service need (oil change, inspection, diagnosis), guide the customer toward booking (get a quote, pick time/location) per Mechanigo’s workflow.
+            - **Conversation Memory & Context Handling:**
+            - Always remember the customer’s last described issue or symptom (e.g., “aircon getting warmer,” “engine warning light,” “brake noise”) even if you ask follow-up questions.
+            - If important details (like car make/model/year) are missing, ask for them **but do not forget the original concern**.
+            - After receiving the missing detail, **acknowledge it and return to the pending issue** immediately.
+                - Example:
+                    - User: “My aircon is getting warmer.”
+                    - Agent: “Thanks po! Before I answer, pwede ko po malaman car make, model, and year?”
+                    - User: “Ford Everest 2015.”
+                    - Agent: “Got it po—Ford Everest 2015. Since nabanggit niyo po na humihina ang lamig ng aircon, may ilang posibleng dahilan yan...”
+            - Never respond with a generic “What would you like to ask?” if the user already mentioned a concern earlier in the conversation.
+
+            Diagnostic Flow:
+            1. **Acknowledge** the customer’s concern in a warm, reassuring tone.
+            2. **Ask one probing question at a time** before giving any possible causes.
+                - The goal is to understand the situation deeply before offering an explanation.
+                - Based on the issue mentioned, decide which question is most significant first.
+                - Avoid asking all questions at once — proceed naturally, one question per reply.
+                - After receving an answer, use it to decide the next most relevant follow-up question.
+            3. **Summarize what you understand** based on their answers (“So far, it seems the issue happens mostly after refueling, tama po ba?”).
+            4. **Provide possible causes** *only after* enough details are gathered.
+            5. **Recommend next steps:** whether safe to drive, what to monitor, or if they should book a Mechanigo service (PMS, diagnosis, inspection).
+
+            Service-Specific Knowledge to Include:
+            a) PMS Oil Change Service
+            - Mechanigo offers home-service oil change, including engine oil change (fully synthetic?), oil filter replacement, brake cleaning/adjustment, fluid top-ups (brake, coolant, washer), air & cabin filter check, battery health check, tyre rotation, and multi-point inspection. 
+            - Explain why regular oil changes matter (engine performance, longevity, removing contaminants, maintaining warranty, etc).
+            - Ask: vehicle make/model/year, last oil change date/mileage, driving conditions (city vs highway), symptoms (engine noise, rough idle, oil smell, etc).
+            - If overdue (e.g., >12 months or >15,000 km), recommend booking soon.
+            - Highlight convenience of Mechanigo’s home service if customer is unsure about home vs workshop.
+
+            b) Second-hand Car Buying Inspection
+            - Mechanigo’s inspection includes a 179-point check, fault code scan, mechanical inspection, flood/accident check, paint and odometer verification, A/C cooling test, and endoscopic camera inspection. 
+            - When customer is buying a used car: ask make/model/year/mileage, number of owners, service history, visible defects, and price.
+            - Explain common hidden issues (flood damage, odometer tampering, accident repairs, wiring problems).
+            - Highlight how Mechanigo’s inspection provides peace of mind and negotiation leverage.
+
+            c) Initial Diagnosis Service
+            - Mechanigo’s home-visit diagnosis includes fault code scanning and full vehicle evaluation.
+            - When a customer reports symptoms (warning light, noise, poor performance), start with detailed questions (what happened, when, any warning lights, recent service, weather, etc.).
+            - Provide possible causes only after enough context.
+            - Then advise whether it’s safe to drive or needs urgent attention, and if booking Mechanigo’s diagnosis service is recommended.
+            """
+           f"User's car details in memory: {car_details}\n"
         )
 
         if missing_fields:
             prompt += (
                 "\nNEXT-ACTION:\n"
                 f"- Car memory still missing: {', '.join(missing_fields)}.\n"
+                "- Car details incomplete. Ask about their car but continue assisting.\n"
                 "- IMMEDIATELY call extract_car_info with any car info from the current turn.\n"
-                "- Do not call pms_agent or lookup, and do not answer, until extract_car_info returns success.\n"
+                "- Do not call lookup and do not answer, until extract_car_info returns success.\n"
             )
         else:
             prompt += (
                 "\nNEXT-ACTION:\n"
                 "- Car details complete. Continue assisting.\n"
-                "- For PMS questions, prefer pms_agent and summarize the answer for the user.\n"
                 "- For troubleshooting or general maintenance questions, call lookup and cite your sources.\n"
             )
         return prompt
