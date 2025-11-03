@@ -9,7 +9,8 @@ def create_agent(
     instructions: str,
     output_type: Optional[Any] = None,
     model: str = None,
-    tools: list = None
+    tools: list = None,
+    input_guardrails: list = None
 ):
     openai.api_key = api_key
     return Agent(
@@ -18,5 +19,6 @@ def create_agent(
         instructions=instructions,
         output_type=output_type,
         model=model,
-        tools=tools or []
+        tools=tools or [],
+        input_guardrails=input_guardrails or []
     )

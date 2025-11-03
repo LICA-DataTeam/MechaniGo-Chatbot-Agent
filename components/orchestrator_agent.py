@@ -37,7 +37,8 @@ class MechaniGoAgent:
         api_key: str = None,
         name: str = "MechaniGo Bot",
         model: str = "gpt-4.1",
-        context: Optional[MechaniGoContext] = None
+        context: Optional[MechaniGoContext] = None,
+        input_guardrail: Optional[list] = None
     ):
         self.logger = logging.getLogger(__name__)
         self.api_key = api_key or openai.api_key or None
@@ -48,6 +49,7 @@ class MechaniGoAgent:
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
         self.session = SQLiteSession(session_id=str(uuid.uuid4()), db_path="conversations.db")
         self.model = model
+        self.input_guardrail = input_guardrail
 
         if not context:
             context = MechaniGoContext(
@@ -71,7 +73,8 @@ class MechaniGoAgent:
             handoff_description=self.handoff_description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[mechanic_agent.as_tool, faq_agent.as_tool]
+            tools=[mechanic_agent.as_tool, faq_agent.as_tool],
+            input_guardrails=self.input_guardrail
         )
 
     async def _dynamic_instructions(
@@ -80,11 +83,18 @@ class MechaniGoAgent:
         agent: Agent
     ):
         # raw values
-        user_car = ctx.context.mechanic_ctx.car_memory
+        mechanic_ctx = getattr(getattr(ctx, "context", None), "mechanic_ctx", None)
+        car = getattr(mechanic_ctx, "car_memory", None)
+        if not mechanic_ctx or not car:
+            car_details = "Unknown car"
+            has_car = False
+            display_car = "No car specified"
+        else:
+            car_details = f"{car.make or 'Unknown'} {car.model or ''} {car.year or ''}"
+            has_car = bool(car.make and car.model)
+            display_car = car_details if has_car else "No car specified"
 
         # Check completeness before setting display values
-        has_car = user_car is not None and bool(user_car.make and user_car.model)
-        display_car = user_car if has_car else "No car specified"
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph.\n"
             "FAQ HANDLING:\n"
@@ -143,7 +153,6 @@ class MechaniGoAgent:
             "- Only call a sub-agent if it will capture missing information or update fields the user explicitly changed. "
             "If a tool returns no_change, do not call it again this turn.\n"
             )
-
         return prompt
 
     async def inquire(self, inquiry: str):
