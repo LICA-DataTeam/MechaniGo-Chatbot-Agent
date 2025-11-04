@@ -1,6 +1,6 @@
 from components.agent_tools import MechanicAgentContext
 from components import MechaniGoAgent, MechaniGoContext
-from components.utils import guardrail
+from components.utils import guardrail, car_guardrail
 from schemas import UserCarDetails
 import streamlit as st
 import asyncio
@@ -33,7 +33,7 @@ def main():
         st.session_state.agent = MechaniGoAgent(
             api_key=api_key,
             context=st.session_state.context,
-            input_guardrail=[guardrail]
+            input_guardrail=[guardrail, car_guardrail]
         )
 
     if st.button("Reset"):
