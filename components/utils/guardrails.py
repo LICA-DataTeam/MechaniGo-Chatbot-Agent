@@ -1,3 +1,4 @@
+from components.utils.registry import register_guardrail
 from pydantic import BaseModel, Field
 from schemas import UserCarDetails
 from contextvars import ContextVar
@@ -160,3 +161,17 @@ async def car_guardrail(
         output_info=result.final_output,
         tripwire_triggered=not result.final_output.car_exists
     )
+
+register_guardrail(
+    name="input_generic",
+    target=guardrail,
+    description="Flag off-domain, abusive, or malicious input.",
+    scopes=("default", )
+)
+
+register_guardrail(
+    name="input_car_exists",
+    target=car_guardrail,
+    description="Validate user car information.",
+    scopes=("default", "car_validations")
+)

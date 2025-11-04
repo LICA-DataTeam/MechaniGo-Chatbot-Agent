@@ -59,13 +59,8 @@ class MechaniGoAgent:
             )
 
         self.context = context
-        mechanic_agent = MechanicAgent(
-            api_key=self.api_key
-        )
-
-        faq_agent = FAQAgent(
-            api_key=self.api_key
-        )
+        self.mechanic_agent = MechanicAgent(api_key=self.api_key)
+        self.faq_agent = FAQAgent(api_key=self.api_key)
 
         self.agent = create_agent(
             api_key=self.api_key,
@@ -73,8 +68,9 @@ class MechaniGoAgent:
             handoff_description=self.handoff_description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[mechanic_agent.as_tool, faq_agent.as_tool],
-            input_guardrails=self.input_guardrail
+            tool_names=("mechanic_agent", "faq_agent"),
+            input_guardrails=self.input_guardrail,
+            guardrail_names=("input_generic", "input_car_exists"),
         )
 
     async def _dynamic_instructions(
