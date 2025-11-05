@@ -63,7 +63,7 @@ Follow these rules carefully:
 4. Never invent details not implied by the user. If uncertain about year or model, leave that field empty.
 5. Output must follow the `CarGuardRail` schema exactly.
 
-### Schema (CarGuardRail)
+### Schema (CarValidation)
 - **car_details**:
     - car_details.make: string or null - manufacturer name mentioned (e.g., "Toyota"), null if none.
     - car_details.model: string or null - model name mentioned (e.g., "Vios"), null if none.

@@ -4,8 +4,7 @@ import logging
 import os
 
 from agents import function_tool
-from components.utils import create_agent
-from components.utils.registry import register_tool
+from components.utils import create_agent, register_tool
 from dotenv import load_dotenv
 from openai import OpenAI
 

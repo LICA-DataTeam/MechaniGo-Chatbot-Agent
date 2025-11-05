@@ -1,6 +1,6 @@
 from components.agent_tools import MechanicAgentContext
 from components import MechaniGoAgent, MechaniGoContext
-from components.utils import guardrail, car_guardrail
+from agents import InputGuardrailTripwireTriggered
 from schemas import UserCarDetails
 import streamlit as st
 import asyncio
@@ -32,8 +32,7 @@ def main():
             )
         st.session_state.agent = MechaniGoAgent(
             api_key=api_key,
-            context=st.session_state.context,
-            input_guardrail=[guardrail, car_guardrail]
+            context=st.session_state.context
         )
 
     if st.button("Reset"):
@@ -60,6 +59,8 @@ def main():
                     response = asyncio.run(handle_user_input(st.session_state.agent, user_input))
                     st.markdown(response)
                     st.session_state.chat_history.append(("assistant", response))
+                except InputGuardrailTripwireTriggered:
+                    st.error("Sorry we cannot process your message right now.")
                 except Exception as e:
                     st.error(f"Exception occurred: {e}")
 

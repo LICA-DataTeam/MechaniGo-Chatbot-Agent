@@ -6,8 +6,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from agents import Agent, RunContextWrapper, function_tool
-from components.utils import create_agent
-from components.utils.registry import register_tool
+from components.utils import create_agent, register_tool
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
