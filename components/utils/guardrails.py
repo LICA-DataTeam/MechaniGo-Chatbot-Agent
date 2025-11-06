@@ -1,3 +1,5 @@
+# Notes:
+# - car guardrail is set aside for now
 from components.utils.registry import register_guardrail
 from pydantic import BaseModel, Field
 from schemas import UserCarDetails
@@ -52,6 +54,7 @@ Return only structured reasoning consistent with the schema provided.
 - **reasoning**: A concise explanation for your decision, mentioning key words or evidence from the message.
 """
 
+# Set aside for now
 CAR_GUARDRAIL_PROMPT = """
 You are the car validator guardrail for MechaniGo PH. Your job is only to decide whether a car described in the user's
 latest message is a real production vehicle, and to surface that judgement in a structured schema.

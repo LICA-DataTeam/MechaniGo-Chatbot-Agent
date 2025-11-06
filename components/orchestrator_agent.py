@@ -70,7 +70,7 @@ class MechaniGoAgent:
             model=self.model,
             tool_names=("mechanic_agent", "faq_agent"),
             input_guardrails=self.input_guardrail,
-            guardrail_names=("input_generic", "input_car_exists"),
+            guardrail_names=("input_generic",),
         )
 
     async def _dynamic_instructions(
