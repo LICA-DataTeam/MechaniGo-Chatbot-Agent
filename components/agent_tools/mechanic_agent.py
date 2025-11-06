@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any, Optional
-from urllib.parse import urlparse
 
 from agents import Agent, RunContextWrapper, function_tool
 from components.utils import create_agent, register_tool
@@ -30,7 +29,7 @@ class MechanicAgent:
         self,
         api_key: str,
         name: str = "mechanic_agent",
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-4.1",
     ):
         self.api_key = api_key
         self.name = name
@@ -70,7 +69,7 @@ class MechanicAgent:
             name="mechanic_lookup",
             target=self._lookup_tool,
             description="Mechanic knowledge lookup with vector store / web fallback.",
-            scopes=("mechanic_suite",),
+            scopes=("mechanic_suite", "default"),
             overwrite=True,
         )
 
@@ -85,25 +84,6 @@ class MechanicAgent:
     @property
     def as_tool(self):
         return self._orchestrator_tool
-
-    @staticmethod
-    def domain_extract(response: dict, target_domain: str) -> tuple[bool, set[str]]:
-        used_domains: set[str] = set()
-
-        for item in response.get("output", []):
-            if item.get("type") != "message":
-                continue
-            for content_block in item.get("content", []):
-                for annotation in content_block.get("annotations", []):
-                    if annotation.get("type") != "url_citation":
-                        continue
-                    url = annotation.get("url")
-                    if not url:
-                        continue
-                    parsed = urlparse(url)
-                    domain = parsed.netloc.replace("www", "")
-                    used_domains.add(domain)
-        return target_domain in used_domains, used_domains
 
     def _dynamic_instructions(
         self,
@@ -130,6 +110,14 @@ class MechanicAgent:
             - Determine the appropriate action for the customer: e.g., recommend booking a service (like an oil change, inspection, diagnosis), alert them if urgent, or advise if they may handle something themselves (if simple) and when to call a professional.
             - Reflect Mechanigo PH's services: home/mobile service (they go to you), transparent pricing, expert mechanics, etc.
 
+            Guide for general issues:
+            - Some issues apply to *all vehicles**, such as: car won't start, weak battery, dead lights, flat tires, overheating, or weak AC.
+            - For these, you may proceed to provide general guidance or possible causes **without waiting for their car details**.
+            - After giving initial help, you may then politely ask for car/make/model/year if needed for model-specific advice.
+            - Example:
+                - User: My car battery is weak
+                - Agent: Madalas ganito po dahilan... (then explain). To further assist you, may I know po yung car make at model niyo?
+
             Agent Instructions / Style Guide:
             - **Tone:** Friendly, professional, clear. Avoid jargon unless you explain it.
             - **Clarity:** Use simple language; when using technical terms, briefly explain them.
@@ -148,30 +136,51 @@ class MechanicAgent:
                 - Based on the issue mentioned, decide which question is most significant first.
                 - Avoid asking all questions at once - proceed naturally, one question per reply.
                 - After receving an answer, use it to decide the next most relevant follow-up question.
+                - If the issue is general, you may skip car details temporarily.
             3. **Summarize what you understand** based on their answers ("So far, it seems the issue happens mostly after refueling, tama po ba?").
             4. **Provide possible causes** *only after* enough details are gathered.
             5. **Recommend next steps:** whether safe to drive, what to monitor, or if they should book a Mechanigo service (PMS, diagnosis, inspection).
 
             Service-Specific Knowledge to Include:
             a) PMS Oil Change Service
-            - Mechanigo offers home-service oil change, including engine oil change (fully synthetic?), oil filter replacement, brake cleaning/adjustment, fluid top-ups (brake, coolant, washer), air & cabin filter check, battery health check, tyre rotation, and multi-point inspection.
             - Explain why regular oil changes matter (engine performance, longevity, removing contaminants, maintaining warranty, etc).
             - Ask: vehicle make/model/year, last oil change date/mileage, driving conditions (city vs highway), symptoms (engine noise, rough idle, oil smell, etc).
             - If overdue (e.g., >12 months or >15,000 km), recommend booking soon.
             - Highlight convenience of Mechanigo's home service if customer is unsure about home vs workshop.
 
             b) Second-hand Car Buying Inspection
-            - Mechanigo's inspection includes a 179-point check, fault code scan, mechanical inspection, flood/accident check, paint and odometer verification, A/C cooling test, and endoscopic camera inspection.
             - When customer is buying a used car: ask make/model/year/mileage, number of owners, service history, visible defects, and price.
             - Explain common hidden issues (flood damage, odometer tampering, accident repairs, wiring problems).
             - Highlight how Mechanigo's inspection provides peace of mind and negotiation leverage.
 
             c) Initial Diagnosis Service
-            - Mechanigo's home-visit diagnosis includes fault code scanning and full vehicle evaluation.
             - When a customer reports symptoms (warning light, noise, poor performance), start with detailed questions (what happened, when, any warning lights, recent service, weather, etc.).
             - Provide possible causes only after enough context.
-            - Then advise whether it is safe to drive or needs urgent attention, and if booking Mechanigo's diagnosis service is recommended.
+            - Then advise whether it is safe to drive or needs urgent attention, and if booking Mechanigo's diagnosis service is recommended.\n\n
+
+            IMPORTANT:
+            - Once the conversation/inquiry has reached some resolve, only then you can suggest the service-specific knowledge:
+            a) PMS Oil Change Service
+            - Mechanigo offers home-service oil change, including engine oil change (fully synthetic?), oil filter replacement, brake cleaning/adjustment, fluid top-ups (brake, coolant, washer), air & cabin filter check, battery health check, tyre rotation, and multi-point inspection.
+
+            b) Second-hand Car Buying Inspection
+            - Mechanigo's inspection includes a 179-point check, fault code scan, mechanical inspection, flood/accident check, paint and odometer verification, A/C cooling test, and endoscopic camera inspection.
+
+            c) Initial Diagnosis Service
+            - Mechanigo's home-visit diagnosis includes fault code scanning and full vehicle evaluation.
+
             """
+            "TOOLS AND WHEN TO USE THEM:\n"
+            "- extract_car_info: Whenever the user mentions or updates their car details.\n"
+            "- lookup: diagnosis, troubleshooting, or maintenance questions.\n"
+            "- ALWAYS use lookup tool when answering a user's car-related inquiry.\n"
+            "- If the lookup tool does not return any relevant information, use your own knowledgebase/training data as a LAST RESORT.\n"
+            "- ALWAYS use the output lookup tool returns.\n\n"
+            "Car Extraction Rules:\n\n"
+            "1. Parse the user's latest message for car details (make, model, year).\n"
+            "2. When car details are provided, check if the exact combination has been produced by a manufacturer (worldwide, any market). Concept cars, future models, joke vehicles, fictional vehicles, or mismatched make/model/years must be treated as not existing.\n"
+            "3. Never invent details not implied by the user. If uncertain about make, model, or year, leave that field empty.\n"
+            "4. When unsure about the car OR if a car mentioned is clearly fictional or inconsistent, ask the user again if their car information is correct.\n"
             f"User's car details in memory: {car_details}\n"
         )
 
@@ -179,16 +188,29 @@ class MechanicAgent:
             prompt += (
                 "\nNEXT-ACTION:\n"
                 f"- Car memory still missing: {', '.join(missing_fields)}.\n"
-                "- Car details incomplete. Ask about their car but continue assisting.\n"
+                "- If the user's question is *general* (battery, overheating, etc.), proceed to assist first.\n"
+                "- If the question involves model-specific issues, ask for or confirm car details.\n"
+                "- If the user gives only the make and model, infer the year based on common years for that model (if possible). If uncertain, ask for clarification.\n"
                 "- IMMEDIATELY call extract_car_info with any car info from the current turn.\n"
-                "- Do not call lookup and do not answer, until extract_car_info returns success.\n"
+                "- When the user asks any question involving car issues, troubleshooting, maintenance, symptoms, parts, causes, or explanations - YOU MUST call the lookup tool.\n"
+                "- NEVER answer such questions directly from your own knowledge.\n"
+                "- Only provide an answer after the lookup tool returns results.\n"
+                "- ALWAYS use the output lookup tool returns.\n"
+                "- Always cite the sources from lookup in your final answer.\n"
             )
         else:
             prompt += (
                 "\nNEXT-ACTION:\n"
                 "- Car details complete. Continue assisting.\n"
-                "- For troubleshooting or general maintenance questions, call lookup and cite your sources.\n"
+                "- When the user asks any question involving car issues, troubleshooting, maintenance, symptoms, parts, causes, or explanations - YOU MUST call the lookup tool.\n"
+                "- If issue is general, skip repeating car info confirmation.\n"
+                "- NEVER answer such questions directly from your own knowledge.\n"
+                "- Only provide an answer after the lookup tool returns results.\n"
+                "- ALWAYS use the output lookup tool returns.\n"
+                "- Always cite the sources from lookup in your final answer.\n"
+                
             )
+        self.logger.info("========== mechanic_agent called! ==========")
         return prompt
 
     def _create_extract_car_info_tool(self):
@@ -296,49 +318,93 @@ class MechanicAgent:
 
     def _lookup(self, question: str):
         self.logger.info("========== _lookup() called ==========")
-        domain = "mechanigo.ph"
+        domain = ["carparts.com", "mechanigo.ph"]
 
         try:
             if self.vector_store_id:
                 try:
                     self.logger.info("Using mechanic knowledge base vector store via file_search...")
+                    vector_instruction = """
+                    You are the dedicated information retriever for Mechanigo's car diagnosis assistant.
+                    You MUST use the file_search tool to answer the question.
+                    Do NOT answer from your own knowledge.
+                    
+                    If the file_search tool found no relevant info, respond with: '__NO_RESULTS__'
+                    """
+                    prompt = [
+                        {"role": "system", "content": vector_instruction},
+                        {"role": "user", "content": question}
+                    ]
                     response = self.openai_client.responses.create(
                         model="gpt-4.1",
-                        input=question,
+                        input=prompt,
                         tools=[{"type": "file_search", "vector_store_ids": [self.vector_store_id]}],
                         max_tool_calls=3,
                         temperature=0,
                     )
-                    return {
-                        "status": "success",
-                        "source": "vector_store",
-                        "answer": (response.output_text or "").strip(),
-                    }
+                    answer = (response.output_text or "").strip()
+                    if answer and answer != "__NO_RESULTS__":
+                        self.logger.info("vector_store found answer!")
+                        return {
+                            "status": "success",
+                            "source": "vector_store",
+                            "answer": answer
+                        }
+                    else:
+                        self.logger.info("Vector store returned no text, falling back to web_search...")
                 except Exception as exc:
                     self.logger.error("Vector store lookup failed: %s. Using web_search...", exc)
 
             try:
+                self.logger.info("Attempting web_search...")
+                web_instruction = """
+                Do NOT answer from your own knowledge.
+                If web_search returns nothing, explicitly state that no information was found.
+                You are an assistant that answers car diagnosis and troubleshooting.
+                You MUST use the web_search tool to answer every question.
+
+                You are allowed to search and retrieve information only from the following domain/s:
+                - carparts.com
+                - mechanigo.ph
+
+                When searching or retrieving from carparts.com, limit your results strictly to the "Auto Repair Blog" section of that site (pages under "https://www.carparts.com/blog/auto-repair/).
+                Do not use the other parts of the site such as the store, product listings, etc.
+
+                IMPORTANT: Always cite your source. If you used your own knowledge, let the user know.
+                """
                 prompt = [
                     {
                         "role": "system",
-                        "content": "You are an assistant that answers car diagnosis and troubleshooting. Always cite your answers.",
+                        "content": web_instruction
                     },
                     {"role": "user", "content": question},
                 ]
                 response = self.openai_client.responses.create(
-                    model="gpt-5",
+                    model="gpt-4.1",
                     input=prompt,
-                    tools=[{"type": "web_search", "filters": {"allowed_domains": [domain]}}],
-                    tool_choice="auto",
+                    tools=[{"type": "web_search", "filters": {"allowed_domains": domain}}],
+                    tool_choice="required",
                     include=["web_search_call.action.sources"],
+                    max_tool_calls=5,
+                    temperature=0
                 )
-                _, domains = MechanicAgent.domain_extract(response.model_dump(), domain)
-                return {
-                    "status": "success",
-                    "source": "web_search",
-                    "answer": (response.output_text or "").strip(),
-                    "citations": domains,
-                }
+                payload = response.model_dump()
+                answer = (response.output_text or "").strip()
+                if answer and payload is not None:
+                    self.logger.info("web_search answer found!")
+                    ans = {
+                        "status": "success",
+                        "source": "web_search",
+                        "answer": answer,
+                        "citations": domain
+                    }
+                    return ans
+                else:
+                    self.logger.info("web_search failed to retrieve any relevant information.")
+                    return {
+                        "status": "fail",
+                        "source": "web_search"
+                    }
             except Exception:
                 return {"status": "error", "message": "web_search failed."}
         except Exception as exc:
