@@ -1,5 +1,7 @@
+from __future__ import annotations
+
+from components.utils import create_agent, register_tool
 from agents import RunContextWrapper, function_tool
-from components.utils import create_agent
 from pydantic import BaseModel
 from typing import Optional, Any
 from schemas import User
@@ -51,12 +53,38 @@ class UserInfoAgent:
             tools=[extract_user_info, get_user_info],
         )
 
-    @property
-    def as_tool(self):
-        return self.agent.as_tool(
+        self._orchestrator_tool = self.agent.as_tool(
             tool_name=self.name,
             tool_description=self.description
         )
+
+        register_tool(
+            name="user_info_agent",
+            target=self._orchestrator_tool,
+            description="User information agent orchestrator hook.",
+            scopes=("default",),
+            overwrite=True,
+        )
+
+        register_tool(
+            name="user_extract_info",
+            target=extract_user_info,
+            description="Parses user information in conversation context.",
+            scopes=("user_suite", "default"),
+            overwrite=True,
+        )
+
+        register_tool(
+            name="user_get_info",
+            target=get_user_info,
+            description="Retrieves user info from memory in conversation context.",
+            scopes=("user_suite", "default"),
+            overwrite=True,
+        )
+
+    @property
+    def as_tool(self):
+        return self._orchestrator_tool
 
     def _create_ctx_extract_user_tool(self):
         @function_tool
