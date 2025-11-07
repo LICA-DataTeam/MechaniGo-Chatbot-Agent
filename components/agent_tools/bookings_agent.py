@@ -1,5 +1,7 @@
+from __future__ import annotations
+
+from components.utils import create_agent, register_tool
 from agents import RunContextWrapper, function_tool
-from components.utils import create_agent
 from typing import Optional, Any
 from pydantic import BaseModel
 from agents import Agent
@@ -38,12 +40,38 @@ class BookingAgent:
             tools=[extract_schedule, extract_payment_type]
         )
 
-    @property
-    def as_tool(self):
-        return self.agent.as_tool(
+        self._orchestrator_tool = self.agent.as_tool(
             tool_name=self.name,
             tool_description=self.description
         )
+
+        register_tool(
+            name="booking_agent",
+            target=self._orchestrator_tool,
+            description="Booking agent orchestrator hook.",
+            scopes=("default",),
+            overwrite=True,
+        )
+
+        register_tool(
+            name="bookings_extract_schedule",
+            target=extract_schedule,
+            description="Parses and stores user schedule.",
+            scopes=("booking_suite", "default"),
+            overwrite=True,
+        )
+
+        register_tool(
+            name="bookings_extract_payment",
+            target=extract_payment_type,
+            description="Extracts the user payment type.",
+            scopes=("booking_suite", "default"),
+            overwrite=True,
+        )
+
+    @property
+    def as_tool(self):
+        return self._orchestrator_tool
 
     def _dynamic_instructions(
         self,
@@ -82,8 +110,6 @@ class BookingAgent:
                 "User: 'Make it 1 PM instead'\n"
                 "- Call extract_schedule(schedule_date='October 30', schedule_time='1 PM')\n\n"
             )
-        self.logger.info("========== BookingAgent prompt ==========")
-        self.logger.info(prompt)
         return prompt
 
     def _create_ctx_extract_sched(self):
