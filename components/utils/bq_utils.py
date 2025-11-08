@@ -109,7 +109,7 @@ class BigQueryClient:
             "schedule_date": user_dict.get("schedule_date"),
             "schedule_time": user_dict.get("schedule_time"),
             "payment": str(user_dict.get("payment")) if user_dict.get("payment") else None,
-            "car": json.dumps(user_dict.get("car")) if user_dict.get("car") else None,
+            "car": user_dict.get("car"),
             "raw_json": json.dumps(user_dict),
         }
         

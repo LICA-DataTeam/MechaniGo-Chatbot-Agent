@@ -100,7 +100,7 @@ def booking_scenario(option: Literal["A", "B", "C", "D", "all"] = "A"):
             expected_behavior="Bot should ask for customer details."
         ),
         Tests(
-            question="Car: Ford Fiesta 2015.\nSchedule: December 5, 2025 mga 2pm po.",
+            question="Car: Ford Fiesta 2015. Schedule: December 5, 2025 mga 2pm po.",
             expected_behavior="Bot should ask for other missing details."
         ),
         Tests(
@@ -108,7 +108,7 @@ def booking_scenario(option: Literal["A", "B", "C", "D", "all"] = "A"):
             expected_behavior="Bot should validate the location, and ask for remaining important details like the name, and contact."
         ),
         Tests(
-            question="Name: Juan Santos\nContact: 091333333. Gcash po thank you.",
+            question="Name: Juan Santo, Contact: 091333333. Gcash po thank you.",
             expected_behavior="Bot should confirm booking details and close gracefully."
         )
     ]
@@ -250,27 +250,32 @@ async def main(test_category: Literal["booking", "faq", "mechanic", "all"] = "bo
     tests = load_tests(test_category, booking_option)
     prev_category = None
     scenario_marker = None
-    for _, test in enumerate(tests, start=1):
-        logging.info(f"Running test {_}: {test.category}")
-        current_marker = f"{test.category}_{booking_option}"
+    try:
+        for _, test in enumerate(tests, start=1):
+            logging.info(f"Running test {_}: {test.category}")
+            current_marker = f"{test.category}_{booking_option}"
 
-        if scenario_marker != current_marker:
-            logging.info(f"========== New session for {current_marker} ==========")
-            agent.session = None
-            scenario_marker = current_marker
+            if scenario_marker != current_marker:
+                logging.info(f"========== New session for {current_marker} ==========")
+                agent.session = None
+                scenario_marker = current_marker
 
-        if prev_category != test.category:
-            agent.session = None
-            prev_category = test.category
+            if prev_category != test.category:
+                agent.session = None
+                prev_category = test.category
 
-        run = await Runner.run(
-            agent.agent,
-            input=test.question,
-            context=agent.context,
-            session=agent.session
-        )
-        logging.info("Saving test results...")
-        save_test_result(test.category, test.question, run.final_output, test.expected_behavior)
+            run = await Runner.run(
+                agent.agent,
+                input=test.question,
+                context=agent.context,
+                session=agent.session
+            )
+            logging.info("Saving test results...")
+            save_test_result(test.category, test.question, run.final_output, test.expected_behavior)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logging.error(f"Exception occurred: {e}")
 
     if delete_table:
         agent._delete_table()
