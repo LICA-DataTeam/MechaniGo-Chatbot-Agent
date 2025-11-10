@@ -3,6 +3,7 @@ from components import MechaniGoAgent, MechaniGoContext
 from agents import InputGuardrailTripwireTriggered
 from config import TEST_TABLE_NAME, DATASET_NAME # change table name later
 from components.utils import BigQueryClient
+from agents import set_default_openai_key
 from schemas import User, UserCarDetails
 import streamlit as st
 import asyncio
@@ -43,6 +44,8 @@ def main():
     if "agent" not in st.session_state:
         try:
             api_key = st.secrets["OPENAI_API_KEY"]["OPENAI_API_KEY"]
+            os.environ["OPENAI_API_KEY"] = api_key
+            set_default_openai_key(api_key)
         except KeyError:
             st.error("No OpenAI API key found in secrets.")
             return
