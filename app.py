@@ -46,6 +46,8 @@ def main():
             api_key = st.secrets["OPENAI_API_KEY"]["OPENAI_API_KEY"]
             os.environ["OPENAI_API_KEY"] = api_key
             set_default_openai_key(api_key)
+            os.environ["FAQ_VECTOR_STORE_ID"] = st.secrets["FAQ_VECTOR_STORE_ID"]
+            os.environ["MECHANIC_VECTOR_STORE_ID"] = st.secrets["MECHANIC_VECTOR_STORE_ID"]
         except KeyError:
             st.error("No OpenAI API key found in secrets.")
             return
