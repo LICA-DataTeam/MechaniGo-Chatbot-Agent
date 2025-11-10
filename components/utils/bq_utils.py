@@ -98,12 +98,30 @@ class BigQueryClient:
             return User(**dict(rows[0]))
         return None
 
+    def get_user_by_email(self, table_name: str, email: str) -> Optional[User]:
+        query = f"""
+        SELECT * FROM `{self.dataset_id}.{table_name}`
+        WHERE email = @email
+        LIMIT 1
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("email", "STRING", email)
+            ]
+        )
+        results = self.client.query(query, job_config=job_config).result()
+        rows = list(results)
+        if rows:
+            return User(**dict(rows[0]))
+        return None
+
     def upsert_user(self, table_name: str, user: User):
         user_dict = user.model_dump()
         table_id = f"{self.client.project}.{self.dataset_id}.{table_name}"
         row = {
             "uid": user_dict.get("uid"),
             "name": user_dict.get("name"),
+            "email": user_dict.get("email"),
             "address": user_dict.get("address"),
             "contact_num": user_dict.get("contact_num"),
             "schedule_date": user_dict.get("schedule_date"),
@@ -118,6 +136,7 @@ class BigQueryClient:
         USING (SELECT
             @uid AS uid,
             @name AS name,
+            @email AS email,
             @address AS address,
             @contact_num AS contact_num,
             @schedule_date AS schedule_date,
@@ -130,6 +149,7 @@ class BigQueryClient:
         WHEN MATCHED THEN
         UPDATE SET
             name = S.name,
+            email = S.email,
             address = S.address,
             contact_num = S.contact_num,
             schedule_date = S.schedule_date,
@@ -138,13 +158,14 @@ class BigQueryClient:
             car = S.car,
             raw_json = S.raw_json
         WHEN NOT MATCHED THEN
-        INSERT (uid, name, address, contact_num, schedule_date, schedule_time, payment, car, raw_json)
-        VALUES(S.uid, S.name, S.address, S.contact_num, S.schedule_date, S.schedule_time, S.payment, S.car, S.raw_json)
+        INSERT (uid, name, email, address, contact_num, schedule_date, schedule_time, payment, car, raw_json)
+        VALUES(S.uid, S.name, S.email, S.address, S.contact_num, S.schedule_date, S.schedule_time, S.payment, S.car, S.raw_json)
         """.format(table_id)
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("uid", "STRING", row["uid"]),
                 bigquery.ScalarQueryParameter("name", "STRING", row["name"]),
+                bigquery.ScalarQueryParameter("email", "STRING", row["email"]),
                 bigquery.ScalarQueryParameter("address", "STRING", row["address"]),
                 bigquery.ScalarQueryParameter("contact_num", "STRING", row["contact_num"]),
                 bigquery.ScalarQueryParameter("schedule_date", "STRING", row["schedule_date"]),
@@ -157,7 +178,7 @@ class BigQueryClient:
 
         try:
             self.client.query(query, job_config=job_config).result()
-            self.logger.info(f"Upserted user {row['name']} into {table_name}")
+            self.logger.info(f"Upserted user {row['name']} ({row['email']}) into {table_name}")
         except Exception as e:
             self.logger.error(f"Failed to upsert user: {e}")
             raise
