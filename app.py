@@ -6,7 +6,9 @@ from components.utils import BigQueryClient
 from schemas import User, UserCarDetails
 import streamlit as st
 import asyncio
+import json
 import uuid
+import os
 
 st.set_page_config(
     page_title="MechaniGo Chatbot",
@@ -15,7 +17,18 @@ st.set_page_config(
 
 def init_bq_client(credentials_file: str, dataset_id: str):
     try:
-        return BigQueryClient(credentials_file=credentials_file, dataset_id=dataset_id)
+        if os.path.exists(credentials_file):
+            creds_source = "local"
+            client = BigQueryClient(credentials_file=credentials_file, dataset_id=dataset_id)
+        else:
+            creds_source = "streamlit_secrets"
+            google_creds = st.secrets["gcp_service_account"]
+            creds_json = json.dumps(dict(google_creds))
+            with open("google_creds.json", "w") as f:
+                f.write(creds_json)
+            client = BigQueryClient(credentials_file="google_creds.json", dataset_id=dataset_id)
+        st.info(f"BigQuery initialized using {creds_source}.")
+        return client
     except Exception as e:
         st.error(f"Failed to initialize BigQuery: {e}")
         return None
