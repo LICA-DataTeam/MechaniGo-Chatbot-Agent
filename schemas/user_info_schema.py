@@ -2,6 +2,12 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from enum import Enum
 
+class ServiceType(str, Enum):
+    PMS = "pms"
+    SECONDHAND_INSPECTION = "secondhand_car_buying_inspection"
+    PARTS_REPLACEMENT = "parts_replacement"
+    CAR_DIAGNOSIS = "car_diagnosis"
+
 class PaymentType(str, Enum):
     GCASH = "gcash"
     CASH = "cash"
@@ -24,6 +30,7 @@ class User(BaseModel):
     email: Optional[EmailStr] = None
     address: Optional[str] = None
     contact_num: Optional[str] = None
+    service_type: Optional[str] = None
     schedule_date: Optional[str] = None
     schedule_time: Optional[str] = None
     payment: Optional[str] = None

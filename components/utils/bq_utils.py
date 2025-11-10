@@ -124,6 +124,7 @@ class BigQueryClient:
             "email": user_dict.get("email"),
             "address": user_dict.get("address"),
             "contact_num": user_dict.get("contact_num"),
+            "service_type": user_dict.get("service_type"),
             "schedule_date": user_dict.get("schedule_date"),
             "schedule_time": user_dict.get("schedule_time"),
             "payment": str(user_dict.get("payment")) if user_dict.get("payment") else None,
@@ -139,6 +140,7 @@ class BigQueryClient:
             @email AS email,
             @address AS address,
             @contact_num AS contact_num,
+            @service_type AS service_type,
             @schedule_date AS schedule_date,
             @schedule_time AS schedule_time,
             @payment AS payment,
@@ -158,8 +160,8 @@ class BigQueryClient:
             car = S.car,
             raw_json = S.raw_json
         WHEN NOT MATCHED THEN
-        INSERT (uid, name, email, address, contact_num, schedule_date, schedule_time, payment, car, raw_json)
-        VALUES(S.uid, S.name, S.email, S.address, S.contact_num, S.schedule_date, S.schedule_time, S.payment, S.car, S.raw_json)
+        INSERT (uid, name, email, address, contact_num, service_type, schedule_date, schedule_time, payment, car, raw_json)
+        VALUES(S.uid, S.name, S.email, S.address, S.contact_num, S.service_type, S.schedule_date, S.schedule_time, S.payment, S.car, S.raw_json)
         """.format(table_id)
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -167,6 +169,7 @@ class BigQueryClient:
                 bigquery.ScalarQueryParameter("name", "STRING", row["name"]),
                 bigquery.ScalarQueryParameter("email", "STRING", row["email"]),
                 bigquery.ScalarQueryParameter("address", "STRING", row["address"]),
+                bigquery.ScalarQueryParameter("service_type", "STRING", row["service_type"]),
                 bigquery.ScalarQueryParameter("contact_num", "STRING", row["contact_num"]),
                 bigquery.ScalarQueryParameter("schedule_date", "STRING", row["schedule_date"]),
                 bigquery.ScalarQueryParameter("schedule_time", "STRING", row["schedule_time"]),

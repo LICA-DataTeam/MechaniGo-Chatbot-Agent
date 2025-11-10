@@ -114,6 +114,7 @@ class MechaniGoAgent:
         user_sched_date = ctx.context.user_ctx.user_memory.schedule_date
         user_sched_time = ctx.context.user_ctx.user_memory.schedule_time
         user_payment = ctx.context.user_ctx.user_memory.payment
+        user_service_type = ctx.context.user_ctx.user_memory.service_type
         car = self.sync_user_car(ctx)
 
         user_email = ctx.context.user_ctx.user_memory.email
@@ -125,6 +126,7 @@ class MechaniGoAgent:
         has_user_info = user_name is not None and bool(user_name.strip())
         has_email = user_email is not None and bool(user_email.strip())
         has_user_contact = user_contact is not None and bool(user_contact.strip())
+        has_service = user_service_type is not None and bool(user_service_type.strip())
         has_address = user_address is not None and bool(user_address.strip())
         has_schedule = (
             user_sched_date is not None and bool(user_sched_date.strip()) and
@@ -136,6 +138,7 @@ class MechaniGoAgent:
         display_name = user_name if has_user_info else "Unknown user"
         display_email = user_email if has_email else "Unknown email"
         display_contact = user_contact if has_user_contact else "No contact"
+        display_service_type = user_service_type if has_service else "No service type"
         display_sched_date = user_sched_date if has_schedule else "Unknown date"
         display_sched_time = user_sched_time if has_schedule else "Unknown time"
         display_address = user_address if has_address else "No address"
@@ -143,7 +146,7 @@ class MechaniGoAgent:
         display_car = car if has_car else "No car specified"
 
         self.logger.info("========== DETAILS ==========")
-        self.logger.info(f"Complete: user={display_name}, email={display_email}, contact_num={display_contact}, car={display_car}, schedule={display_sched_date} @{display_sched_time}, payment={display_payment}, address={display_address}")
+        self.logger.info(f"Complete: user={display_name}, email={display_email}, contact_num={display_contact}, service={display_service_type}, car={display_car}, schedule={display_sched_date} @{display_sched_time}, payment={display_payment}, address={display_address}")
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph.\n"
             "FAQ HANDLING:\n"
@@ -159,6 +162,7 @@ class MechaniGoAgent:
             " - Provide a transparent, ballpark estimate and clarify it is subject to confirmation on site.\n"
             " - If the user asks general questions, you may use faq_agent to answer, then return to the main flow.\n\n"
             "2) Book an Appointment\n"
+            " - Ask for the type of service they need (PMS, secondhand car-buying inspection, car diagnosis, or parts replacement.)\n\n"
             " - Ask for service location (home or office). Save it with user_info_agent if given.\n"
             " - Ask for preferred date and time; when provided, call booking_agent.ctx_extract_sched to save schedule.\n"
             " - Ask for preferred payment type (GCash, cash, credit); when provided, call booking_agent.ctx_extract_payment_type.\n"
@@ -178,6 +182,8 @@ class MechaniGoAgent:
             "- user_info_agent:\n"
             " - When the user provides their details (e.g., name, email, contact address), always call user_info_agent.\n"
             "- booking_agent:\n"
+            " - Use when the user provides a service they need (PMS, secondhand car-buying, parts replacement, car diagnosis),"
+            "call booking_agent.extract_service().\n"
             " - Use when the user provides their schedule date/time.\n"
             " - Use when the user provides payment preference.\n"
             "- mechanic_agent:\n"
@@ -203,7 +209,7 @@ class MechaniGoAgent:
             "SCOPE:\n"
             "Currently, you only handle the following agents: user_info_agent, mechanic_agent and faq_agent.\n"
             "You need to answer a customer's general inquiries about MechaniGo (FAQs) and car-related questions (e.g., PMS, diagnosis and troubleshooting).\n"
-            "If they ask about booking related questions (i.e., they want to book an appointment for PMS or Secondhand car-buying), ask for their information first (name, email, contact, address, etc.)\n"
+            "If they ask about booking related questions (i.e., they want to book an appointment for PMS, Secondhand car-buying, etc.), ask for their information first (name, email, contact, address, etc.)\n"
             "COMMUNICATION STYLE:\n"
             "- Always introduce yourself to customers cheerfully and politely.\n"
             "- Be friendly, concise, and proactive.\n"
@@ -217,6 +223,7 @@ class MechaniGoAgent:
             f"- User: {user_name}\n"
             f"- Email: {user_email}\n"
             f"- Contact: {user_contact}\n"
+            f"- Service: {user_service_type}\n"
             f"- Car: {display_car}\n"
             f"- Location: {user_address}\n"
             f"- Schedule: {display_sched_date} @{display_sched_time}\n"
@@ -228,6 +235,8 @@ class MechaniGoAgent:
             missing.append("name")
         if not has_email:
             missing.append("email")
+        if not has_service:
+            missing.append("service type")
         if not has_car:
             missing.append("car details")
         if not has_user_contact:
@@ -260,6 +269,7 @@ class MechaniGoAgent:
             filled(user.name),
             filled(user.email),
             filled(user.contact_num),
+            filled(user.service_type),
             filled(user.address),
             filled(user.schedule_date),
             filled(user.schedule_time),
@@ -381,6 +391,7 @@ class MechaniGoAgent:
             bigquery.SchemaField("name", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("email", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("address", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("service_type", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("contact_num", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("schedule_date", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("schedule_time", "STRING", mode="NULLABLE"),

@@ -31,13 +31,14 @@ class BookingAgent:
 
         extract_schedule = self._create_ctx_extract_sched()
         extract_payment_type = self._create_ctx_extract_payment_type()
+        extract_service_type = self._create_ctx_extract_service()
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[extract_schedule, extract_payment_type]
+            tools=[extract_schedule, extract_payment_type, extract_service_type]
         )
 
         self._orchestrator_tool = self.agent.as_tool(
@@ -69,6 +70,14 @@ class BookingAgent:
             overwrite=True,
         )
 
+        register_tool(
+            name="bookings_extract_service",
+            target=extract_service_type,
+            description="Extracts the user service type.",
+            scopes=("booking_suite", "default"),
+            overwrite=True,
+        )
+
     @property
     def as_tool(self):
         return self._orchestrator_tool
@@ -80,22 +89,26 @@ class BookingAgent:
     ):
         self.logger.info("========== dynamic_instructions ==========")
         user = ctx.context.user_ctx.user_memory
-        user_payment_string = getattr(ctx.context.user_ctx.user_memory, "payment", None)
         self.logger.info(f"User.name: {user.name}")
+        self.logger.info(f"User.service_type: {user.service_type}")
         self.logger.info(f"User.schedule_date: {user.schedule_date}")
         self.logger.info(f"User.schedule_time: {user.schedule_time}")
-        self.logger.info(f"User.payment: {user_payment_string}")
+        self.logger.info(f"User.payment: {user.payment}")
         prompt = (
                 f"You are {agent.name}, a bookings and payment agent for MechaniGo.ph.\n\n"
                 "Your task is to handle scheduling the booking and payment of the users.\n\n"
                 # "Make sure all user information is provided before confirming their schedule and payment type.\n\n"
+                "Call extract_service_type once when the customer provides the type of service they need.\n\n"
+                "The only acceptable service type options are pms, secondhand car-buying inspection, parts replacement, and car diagnosis.\n\n"
                 "Once the user decides what service they want, ask them the schedule and their payment type.\n\n"
                 "Call extract_schedule once when the customer provides their schedule.\n\n"
                 "Call extract_payment_type once when the customer provides their preferred payment type.\n\n"
                 "If the user gives both date and time, immediately call extract_schedule even if the time isn't perfectly worded.\n\n"
                 "When a user clarifies only one part (either date or time), reuse the other value from memory and call extract_schedule with both. Don't ask for the missing part again if it already exists in memory.\n\n"
                 "If neither date nor time is stored, ask the user to provide both in the same message.\n\n"
-                "Example: \n\n"
+                "Examples: \n\n"
+                "User: I want to schedule an appointment for PMS.\n"
+                "Call extract_service_type(service_type='pms')\n\n"
                 "User: 'My schedule is October 12, 2025 at around 10 am'.\n"
                 "Call extract_sched(schedule_date='October 12, 2025', schedule_time='10 am')\n\n"
                 "If you're not 100% sure about the date or time correctly, ask the user to restate both.\n\n"
@@ -218,4 +231,47 @@ class BookingAgent:
         return {
             "status": "success",
             "message": f"Payment method saved: {user.payment}"
+        }
+
+    def _create_ctx_extract_service(self):
+        @function_tool
+        def ctx_extract_service(
+            ctx: RunContextWrapper[Any],
+            service_type: Optional[str] = None
+        ):
+            return self._extract_service_type(ctx, service_type)
+        return ctx_extract_service
+
+    def _extract_service_type(
+        self,
+        ctx: RunContextWrapper[Any],
+        service_type: Optional[str] = None
+    ):
+        user = ctx.context.user_ctx.user_memory
+        prev_service = (user.service_type or "").strip().lower()
+        new_service = (service_type or "").strip().lower()
+
+        if not new_service:
+            self.logger.info(f"User: {user.name}")
+            return {
+                "status": "error",
+                "message": "No service type. Please ask the user to specify their service."
+            }
+
+        first_set = (not prev_service) and bool(new_service)
+        if not first_set and new_service == prev_service:
+            self.logger.info("No change for service type.")
+            return {
+                "status": "no_change",
+                "message": "Payment method unchanged"
+            }
+
+        user.service_type = service_type
+        self.logger.info("========== extract_service_type() called ==========")
+        self.logger.info(f"User: {user.name}")
+        self.logger.info(f"Service Type: {user.service_type}")
+
+        return {
+            "status": "success",
+            "message": f"Service type saved: {user.service_type}"
         }

@@ -94,12 +94,13 @@ class UserInfoAgent:
             address: Optional[str] = None,
             email: Optional[str] = None,
             contact_num: Optional[str] = None,
+            service_type: Optional[str] = None,
             schedule_date: Optional[str] = None,
             schedule_time: Optional[str] = None,
             payment: Optional[str] = None,
             car: Optional[str] = None
         ):
-            return self._ctx_extract_user_info(ctx, name, address, email, contact_num, schedule_date, schedule_time, payment, car)
+            return self._ctx_extract_user_info(ctx, name, address, email, contact_num, service_type, schedule_date, schedule_time, payment, car)
         return ctx_extract_user_info
 
     def _create_ctx_get_user_tool(self):
@@ -115,6 +116,7 @@ class UserInfoAgent:
         address: Optional[str] = None,
         email: Optional[str] = None,
         contact_num: Optional[str] = None,
+        service_type: Optional[str] = None,
         schedule_date: Optional[str] = None,
         schedule_time: Optional[str] = None,
         payment: Optional[str] = None,
@@ -129,6 +131,7 @@ class UserInfoAgent:
             "email": norm(email) or None,
             "address": norm(address) or None,
             "contact_num": norm(contact_num) or None,
+            "service_type": norm(service_type) or None,
             "schedule_date": norm(schedule_date) or None,
             "schedule_time": norm(schedule_time) or None,
             "payment": norm(payment) or None,
@@ -139,6 +142,7 @@ class UserInfoAgent:
             "email": norm(user.email) or None,
             "address": norm(user.address) or None,
             "contact_num": norm(user.contact_num) or None,
+            "service_type": norm(user.service_type) or None,
             "schedule_date": norm(user.schedule_date) or None,
             "schedule_time": norm(user.schedule_time) or None,
             "payment": norm(user.payment) or None,
