@@ -92,13 +92,14 @@ class UserInfoAgent:
             ctx: RunContextWrapper[UserInfoAgentContext],
             name: Optional[str] = None,
             address: Optional[str] = None,
+            email: Optional[str] = None,
             contact_num: Optional[str] = None,
             schedule_date: Optional[str] = None,
             schedule_time: Optional[str] = None,
             payment: Optional[str] = None,
             car: Optional[str] = None
         ):
-            return self._ctx_extract_user_info(ctx, name, address, contact_num, schedule_date, schedule_time, payment, car)
+            return self._ctx_extract_user_info(ctx, name, address, email, contact_num, schedule_date, schedule_time, payment, car)
         return ctx_extract_user_info
 
     def _create_ctx_get_user_tool(self):
@@ -112,6 +113,7 @@ class UserInfoAgent:
         ctx: RunContextWrapper[Any],
         name: Optional[str] = None,
         address: Optional[str] = None,
+        email: Optional[str] = None,
         contact_num: Optional[str] = None,
         schedule_date: Optional[str] = None,
         schedule_time: Optional[str] = None,
@@ -124,6 +126,7 @@ class UserInfoAgent:
 
         incoming = {
             "name": norm(name) or None,
+            "email": norm(email) or None,
             "address": norm(address) or None,
             "contact_num": norm(contact_num) or None,
             "schedule_date": norm(schedule_date) or None,
@@ -133,6 +136,7 @@ class UserInfoAgent:
         }
         current = {
             "name": norm(user.name) or None,
+            "email": norm(user.email) or None,
             "address": norm(user.address) or None,
             "contact_num": norm(user.contact_num) or None,
             "schedule_date": norm(user.schedule_date) or None,
@@ -161,6 +165,6 @@ class UserInfoAgent:
 
     def _ctx_get_user_info(self, ctx: RunContextWrapper[Any]):
         user = ctx.context.user_ctx.user_memory
-        if user and any([user.name, user.address, user.car, user.uid]):
+        if user and any([user.name, user.email, user.address, user.car, user.uid]):
             return {"status": "success", "user": user.model_dump()}
         return {"status": "not_found", "message": "No user data yet."}

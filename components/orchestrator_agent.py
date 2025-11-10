@@ -116,12 +116,14 @@ class MechaniGoAgent:
         user_payment = ctx.context.user_ctx.user_memory.payment
         car = self.sync_user_car(ctx)
 
+        user_email = ctx.context.user_ctx.user_memory.email
         user_contact = ctx.context.user_ctx.user_memory.contact_num
         user_address = ctx.context.user_ctx.user_memory.address
 
         # Check completeness before setting display values
         self.logger.info("========== VERIFYING USER INFORMATION ==========")
         has_user_info = user_name is not None and bool(user_name.strip())
+        has_email = user_email is not None and bool(user_email.strip())
         has_user_contact = user_contact is not None and bool(user_contact.strip())
         has_address = user_address is not None and bool(user_address.strip())
         has_schedule = (
@@ -132,6 +134,7 @@ class MechaniGoAgent:
         has_car = car is not None and bool(car.strip())
 
         display_name = user_name if has_user_info else "Unknown user"
+        display_email = user_email if has_email else "Unknown email"
         display_contact = user_contact if has_user_contact else "No contact"
         display_sched_date = user_sched_date if has_schedule else "Unknown date"
         display_sched_time = user_sched_time if has_schedule else "Unknown time"
@@ -140,7 +143,7 @@ class MechaniGoAgent:
         display_car = car if has_car else "No car specified"
 
         self.logger.info("========== DETAILS ==========")
-        self.logger.info(f"Complete: user={display_name}, contact_num={display_contact}, car={display_car}, schedule={display_sched_date} @{display_sched_time}, payment={display_payment}, address={display_address}")
+        self.logger.info(f"Complete: user={display_name}, email={display_email}, contact_num={display_contact}, car={display_car}, schedule={display_sched_date} @{display_sched_time}, payment={display_payment}, address={display_address}")
         prompt = (
             f"You are {agent.name}, the main orchestrator agent and a helpful assistant for MechaniGo.ph.\n"
             "FAQ HANDLING:\n"
@@ -150,8 +153,8 @@ class MechaniGoAgent:
             "BUSINESS FLOW (follow strictly): \n\n"
             "1) Get an estimate/quote\n\n"
             " - Understand what the car needs (diagnosis, maintenance, or car-buying help).\n"
-            " - If the user's name or contact number is missing, politely ask for them and, once provided,\n"
-            " call user_info_agent.ctx_extract_user_info(name=..., contact_num=...). Do not re-ask if saved.\n"
+            " - If the user's name email, or contact number is missing, politely ask for them and, once provided,\n"
+            " call user_info_agent.ctx_extract_user_info(name=..., email=..., contact_num=...). Do not re-ask if saved.\n"
             " - Ensure car details are known. If missing or ambiguous, call mechanic_agent to parse/collect car details.\n"
             " - Provide a transparent, ballpark estimate and clarify it is subject to confirmation on site.\n"
             " - If the user asks general questions, you may use faq_agent to answer, then return to the main flow.\n\n"
@@ -173,7 +176,7 @@ class MechaniGoAgent:
             " - If mechanic_agent does not return any relevant information, use your own knowledge base/training data as a LAST RESORT.\n"
             "TOOLS AND WHEN TO USE THEM:\n"
             "- user_info_agent:\n"
-            " - When the user provides their details (e.g., name, contact address), always call user_info_agent.\n"
+            " - When the user provides their details (e.g., name, email, contact address), always call user_info_agent.\n"
             "- booking_agent:\n"
             " - Use when the user provides their schedule date/time.\n"
             " - Use when the user provides payment preference.\n"
@@ -200,7 +203,7 @@ class MechaniGoAgent:
             "SCOPE:\n"
             "Currently, you only handle the following agents: user_info_agent, mechanic_agent and faq_agent.\n"
             "You need to answer a customer's general inquiries about MechaniGo (FAQs) and car-related questions (e.g., PMS, diagnosis and troubleshooting).\n"
-            "If they ask about booking related questions (i.e., they want to book an appointment for PMS or Secondhand car-buying), ask for their information first (name, contact, address, etc.)\n"
+            "If they ask about booking related questions (i.e., they want to book an appointment for PMS or Secondhand car-buying), ask for their information first (name, email, contact, address, etc.)\n"
             "COMMUNICATION STYLE:\n"
             "- Always introduce yourself to customers cheerfully and politely.\n"
             "- Be friendly, concise, and proactive.\n"
@@ -212,6 +215,7 @@ class MechaniGoAgent:
             "- If a tool returns no_change, do not call it again this turn.\n\n"
             "CURRENT STATE SNAPSHOT:\n"
             f"- User: {user_name}\n"
+            f"- Email: {user_email}\n"
             f"- Contact: {user_contact}\n"
             f"- Car: {display_car}\n"
             f"- Location: {user_address}\n"
@@ -222,6 +226,8 @@ class MechaniGoAgent:
         missing = []
         if not has_user_info:
             missing.append("name")
+        if not has_email:
+            missing.append("email")
         if not has_car:
             missing.append("car details")
         if not has_user_contact:
@@ -252,6 +258,7 @@ class MechaniGoAgent:
             return bool(value and value.strip())
         return all([
             filled(user.name),
+            filled(user.email),
             filled(user.contact_num),
             filled(user.address),
             filled(user.schedule_date),
@@ -261,7 +268,7 @@ class MechaniGoAgent:
         ])
 
     async def inquire(self, inquiry: str):
-        prev_contact = (self.context.user_ctx.user_memory.contact_num or "").strip()
+        prev_email = (self.context.user_ctx.user_memory.email or "").strip()
         response = await Runner.run(
             starting_agent=self.agent,
             input=inquiry,
@@ -269,16 +276,16 @@ class MechaniGoAgent:
             session=self.session
         )
         
-        new_contact = (self.context.user_ctx.user_memory.contact_num or "").strip()
-        if new_contact and new_contact != prev_contact:
+        new_email = (self.context.user_ctx.user_memory.email or "").strip()
+        if new_email and new_email != prev_email:
             try:
-                linked = self.link_session_by_contact(new_contact)
+                linked = self.link_session_by_email(new_email)
                 if linked:
-                    self.logger.info(f"Session linked via contact: {new_contact}.")
+                    self.logger.info(f"Session linked via email: {new_email}.")
                 else:
-                    self.logger.info(f"No existing user found for contact: {new_contact}.")
+                    self.logger.info(f"No existing user found for email: {new_email}.")
             except Exception as e:
-                self.logger.error(f"Error linking by contact_num: {e}")
+                self.logger.error(f"Error linking by email: {e}")
 
         if self._complete_user_data(self.context.user_ctx.user_memory):
             self.save_user_state()
@@ -318,22 +325,22 @@ class MechaniGoAgent:
             return formatted
         return user.car or ""
 
-    def link_session_by_contact(self, contact_num: str) -> bool:
+    def link_session_by_email(self, email: str) -> bool:
         try:
             if not self.bq_client:
                 self.logger.warning("No BigQuery client set.")
-                self.context.user_ctx.user_memory.contact_num = contact_num
+                self.context.user_ctx.user_memory.email = email
                 return False
             
-            normalized = (contact_num or "").strip()
+            normalized = (email or "").strip()
             if not normalized:
-                self.logger.info("Empty contact provided; skipping link...")
+                self.logger.info("Empty email provided; skipping link...")
                 return False
 
-            existing = self.bq_client.get_user_by_contact_num(self.table_name, contact_num=normalized)
+            existing = self.bq_client.get_user_by_email(self.table_name, email=normalized)
             if not existing:
-                self.logger.info(f"No existing user for contact: {normalized}")
-                self.context.user_ctx.user_memory.contact_num = normalized
+                self.logger.info(f"No existing user for email: {normalized}")
+                self.context.user_ctx.user_memory.email = normalized
                 return False
 
             current = self.context.user_ctx.user_memory
@@ -343,10 +350,10 @@ class MechaniGoAgent:
                 )
             self.context.user_ctx.user_memory = existing
             self._hydrate_mechanic_car_from_user(existing)
-            self.logger.info(f"Linked session to uid={existing.uid} for contact={normalized}")
+            self.logger.info(f"Linked session to uid={existing.uid} for email={normalized}")
             return True
         except Exception as e:
-            self.logger.error(f"Failed to link by contact: {e}")
+            self.logger.error(f"Failed to link by email: {e}")
             return False
 
     def _hydrate_mechanic_car_from_user(self, user: User):
@@ -372,6 +379,7 @@ class MechaniGoAgent:
         schema = [
             bigquery.SchemaField("uid", "STRING", mode="REQUIRED"),
             bigquery.SchemaField("name", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("email", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("address", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("contact_num", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("schedule_date", "STRING", mode="NULLABLE"),

@@ -1,7 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
 from enum import Enum
-import uuid
 
 class PaymentType(str, Enum):
     GCASH = "gcash"
@@ -22,6 +21,7 @@ class UserCarDetails(BaseModel):
 class User(BaseModel):
     uid: Optional[str] = None
     name: Optional[str] = None
+    email: Optional[EmailStr] = None
     address: Optional[str] = None
     contact_num: Optional[str] = None
     schedule_date: Optional[str] = None
