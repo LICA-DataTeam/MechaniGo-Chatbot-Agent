@@ -42,7 +42,7 @@ def main():
 
     if "agent" not in st.session_state:
         try:
-            api_key = st.secrets["OPENAI_API_KEY"]
+            api_key = st.secrets["OPENAI_API_KEY"]["OPENAI_API_KEY"]
         except KeyError:
             st.error("No OpenAI API key found in secrets.")
             return
