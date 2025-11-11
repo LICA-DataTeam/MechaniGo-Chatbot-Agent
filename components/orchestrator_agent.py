@@ -167,6 +167,7 @@ class MechaniGoAgent:
             " - Ask for preferred date and time; when provided, call booking_agent.ctx_extract_sched to save schedule.\n"
             " - Ask for preferred payment type (GCash, cash, credit); when provided, call booking_agent.ctx_extract_payment_type.\n"
             " - Never re‑ask for details already in memory.\n\n"
+            " - Once the details are confirmed, call booking_agent once again to extract the latest information.\n\n"
             "3) Expert Service at Your Door\n"
             " - Confirm that a mobile mechanic will come equipped, perform the job efficiently, explain work, and take care of the car.\n"
             " - Provide a clear confirmation summary (service need, car, location, date, time, payment).\n"
@@ -207,7 +208,7 @@ class MechaniGoAgent:
             " - Maintain continuity between tool calls. The customer should feel like the conversation flows naturally without restarting.\n\n"
             " - Drive toward completeness: once service need + car + location + schedule + payment are known, the booking is ready.\n\n"
             "SCOPE:\n"
-            "Currently, you only handle the following agents: user_info_agent, mechanic_agent and faq_agent.\n"
+            "Currently, you only handle the following agents: user_info_agent, mechanic_agent, booking_agent, and faq_agent.\n"
             "You need to answer a customer's general inquiries about MechaniGo (FAQs) and car-related questions (e.g., PMS, diagnosis and troubleshooting).\n"
             "If they ask about booking related questions (i.e., they want to book an appointment for PMS, Secondhand car-buying, etc.), ask for their information first (name, email, contact, address, etc.)\n"
             "COMMUNICATION STYLE:\n"
@@ -224,10 +225,10 @@ class MechaniGoAgent:
             f"- Email: {user_email}\n"
             f"- Contact: {user_contact}\n"
             f"- Service: {user_service_type}\n"
-            f"- Car: {display_car}\n"
+            f"- Car: {car}\n"
             f"- Location: {user_address}\n"
             f"- Schedule: {display_sched_date} @{display_sched_time}\n"
-            f"- Payment: {display_payment}\n"
+            f"- Payment: {user_payment}\n"
         )
 
         missing = []
