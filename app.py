@@ -7,9 +7,15 @@ from agents import set_default_openai_key
 from schemas import User, UserCarDetails
 import streamlit as st
 import asyncio
+import logging
 import json
 import uuid
 import os
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 st.set_page_config(
     page_title="MechaniGo Chatbot",
@@ -28,11 +34,49 @@ def init_bq_client(credentials_file: str, dataset_id: str):
             with open("google_creds.json", "w") as f:
                 f.write(creds_json)
             client = BigQueryClient(credentials_file="google_creds.json", dataset_id=dataset_id)
-        st.info(f"BigQuery initialized using {creds_source}.")
+        logging.info(f"BigQuery initialized using {creds_source}.")
         return client
     except Exception as e:
         st.error(f"Failed to initialize BigQuery: {e}")
         return None
+
+def load_secrets():
+    api_key = None
+    api_key_source = None
+
+    logging.info("Loading API keys...")
+    try:
+        secrets_entry = st.secrets["OPENAI_API_KEY"]["OPENAI_API_KEY"]
+        if isinstance(secrets_entry, dict):
+            api_key = secrets_entry.get("OPENAI_API_KEY")
+        else:
+            api_key = secrets_entry
+        if api_key:
+            api_key_source = "Streamlit secrets"
+    except Exception as e:
+        st.error(f"Could not load OpenAI API key from secrets: {e}")
+
+    if not api_key:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            api_key_source = "environment variables"
+    
+    if not api_key:
+        st.error("No OpenAI API key found.")
+        return
+    
+    os.environ["OPENAI_API_KEY"] = api_key
+    set_default_openai_key(api_key)
+    logging.info(f"OpenAI API key loaded from {api_key_source}.")
+
+    logging.info("Loading vector store IDs...")
+    try:
+        os.environ["FAQ_VECTOR_STORE_ID"] = st.secrets["FAQ_VECTOR_STORE_ID"]
+        os.environ["MECHANIC_VECTOR_STORE_ID"] = st.secrets["MECHANIC_VECTOR_STORE_ID"]
+    except Exception:
+        st.warning("Vector stores unable to load.")
+
+    return api_key
 
 async def handle_user_input(agent: MechaniGoAgent, message: str):
     return await agent.inquire(message)
@@ -42,15 +86,7 @@ def main():
         st.session_state.chat_history = []
 
     if "agent" not in st.session_state:
-        try:
-            api_key = st.secrets["OPENAI_API_KEY"]["OPENAI_API_KEY"]
-            os.environ["OPENAI_API_KEY"] = api_key
-            set_default_openai_key(api_key)
-            os.environ["FAQ_VECTOR_STORE_ID"] = st.secrets["FAQ_VECTOR_STORE_ID"]
-            os.environ["MECHANIC_VECTOR_STORE_ID"] = st.secrets["MECHANIC_VECTOR_STORE_ID"]
-        except KeyError:
-            st.error("No OpenAI API key found in secrets.")
-            return
+        api_key = load_secrets()
 
         if "bq_client" not in st.session_state:
             st.session_state.bq_client = init_bq_client('google_creds.json', DATASET_NAME)
