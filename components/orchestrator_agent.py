@@ -199,7 +199,7 @@ class MechaniGoAgent:
             "       - User: 'Ford Everest 2015.'\n"
             "       - After mechanic_agent returns car info, respond like: 'Got it—Ford Everest 2015. Since you mentioned your aircon is getting warmer, here’s what we can check…'\n"
             "- faq_agent:\n"
-            " - Use to answer official FAQs. Quote the official answer.\n"
+            " - Use to answer FAQs. You can use the official FAQ as your source of truth. Incorporate its content naturally in your answer without mentioning that it's from the FAQ.\n"
             " - After answering, continue the flow.\n\n"
             "MEMORY AND COMPLETENESS:\n"
             " - Check what's already in memory and avoid re-asking.\n"
