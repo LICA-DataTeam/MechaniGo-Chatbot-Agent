@@ -122,6 +122,35 @@ class UserInfoAgent:
         payment: Optional[str] = None,
         car: Optional[str] = None
     ):
+        """
+        Normalize incoming user attributes, compare them with the current user memory, update any fields 
+        that changed, and return a status/report of the updates so the orchestrator agent knows what was saved.
+
+        **Note**: All parameters (except for `ctx`) default to `None`.
+
+        :param ctx: Active run context.
+        :type ctx: RunContextWrapper[Any]
+        :param name: User's name.
+        :type name: Optional[str]
+        :param address: Service address.
+        :type address: Optional[str]
+        :param email: Email address.
+        :type email: Optional[str]
+        :param contact_num: Contact number.
+        :type contact_num: Optional[str]
+        :param service_type: Requested service type.
+        :type service_type: Optional[str]
+        :param schedule_date: Preferred service date.
+        :type schedule_date: Optional[str]
+        :param schedule_time: Preferred service time.
+        :type schedule_time: Optional[str]
+        :param payment: Preferred payment method.
+        :type payment: Optional[str]
+        :param car: Free-form car details.
+        :type car: Optional[str]
+        :returns: Mapping with a status, any changed fields, and the updated user model.
+        :rtype: dict
+        """
         user = ctx.context.user_ctx.user_memory
 
         def norm(x): return (x or "").strip()
@@ -168,6 +197,14 @@ class UserInfoAgent:
         }
 
     def _ctx_get_user_info(self, ctx: RunContextWrapper[Any]):
+        """
+        Retrieves current user snapshot from context memory.
+
+        :param ctx: Active run context to pull user state from.
+        :type ctx: RunContextWrapper[Any]
+        :returns: ``{"status": "success", "user": ...}`` when memory contains data, otherwise ``{"status": "not_found", "message": ...}``.
+        :rtype: dict
+        """
         user = ctx.context.user_ctx.user_memory
         if user and any([user.name, user.email, user.address, user.car, user.uid]):
             return {"status": "success", "user": user.model_dump()}

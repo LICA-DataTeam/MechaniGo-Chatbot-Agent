@@ -141,6 +141,18 @@ class BookingAgent:
         schedule_date: Optional[str] = None,
         schedule_time: Optional[str] = None
     ):
+        """
+        Validate, update, and report the user’s scheduled date/time in memory.
+
+        :param ctx: Conversation context whose ``user_ctx.user_memory`` holds the schedule fields.
+        :type ctx: RunContextWrapper[Any]
+        :param schedule_date: New schedule date provided by the user, if any.
+        :type schedule_date: Optional[str]
+        :param schedule_time: New schedule time provided by the user, if any.
+        :type schedule_time: Optional[str]
+        :returns: Status payload describing whether the schedule was updated, kept unchanged, or rejected due to missing inputs.
+        :rtype: dict
+        """
         user = ctx.context.user_ctx.user_memory
         prev_date, prev_time = user.schedule_date, user.schedule_time
 
@@ -200,6 +212,16 @@ class BookingAgent:
         ctx: RunContextWrapper[Any],
         payment: Optional[str] = None
     ):
+        """
+        Validate, update, and report the user’s payment type in memory.
+
+        :param ctx: Conversation context whose ``user_ctx.user_memory`` holds the schedule fields.
+        :type ctx: RunContextWrapper[Any]
+        :param payment: User's payment type.
+        :type payment: Optional[str]
+        :returns: Status payload describing whether the schedule was updated, kept unchanged, or rejected due to missing inputs.
+        :rtype: dict
+        """
         user = ctx.context.user_ctx.user_memory
         prev_payment_norm = (user.payment or "").strip().lower()
         new_payment_norm = (payment or "").strip().lower()
@@ -247,6 +269,15 @@ class BookingAgent:
         ctx: RunContextWrapper[Any],
         service_type: Optional[str] = None
     ):
+        """
+        Validate, update, and report the user’s service type in memory.
+
+        :param ctx: Conversation context whose ``user_ctx.user_memory`` holds the schedule fields.
+        :type ctx: RunContextWrapper[Any]
+        :param service_type: User's preferred type of service.
+        :type service_type: Optional[str]
+        :returns: Status payload describing whether the schedule was updated, kept unchanged, or rejected due to missing inputs.
+        """
         user = ctx.context.user_ctx.user_memory
         prev_service = (user.service_type or "").strip().lower()
         new_service = (service_type or "").strip().lower()

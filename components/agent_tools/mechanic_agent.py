@@ -250,6 +250,28 @@ class MechanicAgent:
         fuel_type: Optional[str] = None,
         transmission: Optional[str] = None,
     ):
+        """
+        Extracts and updates the user's car information based on the context.
+
+        :param ctx: The context used in the conversation.
+        :type ctx: RunContextWrapper[Any]
+        :param make: Car make. Defaults to ``None``.
+        :type make: Optional[str]
+        :param model: Car model. Defaults to ``None``.
+        :type model: Optional[str]
+        :param year: Car manufacturing year. Defaults to ``None``.
+        :type year: Optional[str]
+        :param fuel_type: Type of fuel. Defaults to ``None``.
+        :type fuel_type: Optional[str]
+        :param transmission: Transmission type. Defaults to ``None``.
+        :type transmission: Optional[str]
+
+        :returns: A dictionary containing the status of the update, changed fields, current car details,
+              and a message describing the result.
+              - If no changes: `{"status": "no_change", "message": "...", "car_details": {...}}`
+              - If updates were made: `{"status": "success", "changed_fields": {...}, "car_details": {...}, "message": "..."}`
+        :rtype: dict
+        """
         self.logger.info("========== Extracting Car Info ==========")
         self.logger.info("Received: make=%s, model=%s, year=%s", make, model, year)
 
@@ -317,6 +339,18 @@ class MechanicAgent:
         }
 
     def _lookup(self, question: str):
+        """
+        The main tool of `MechanicAgent` for answering car-related inquiries such as car diagnosis, troubleshooting, maintenance, etc.
+
+        If `MechanicAgent` has a `vector_store_id` initialized, first tries a vector store for answer retrieval. Otherwise,
+        web search is used as a fallback.
+
+        :param question: Question/inquiry.
+        :type question: str
+
+        :returns: A dictionary containing the status of the update.
+        :rtype: dict
+        """
         self.logger.info("========== _lookup() called ==========")
         domain = ["carparts.com", "mechanigo.ph"]
 

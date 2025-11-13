@@ -84,6 +84,16 @@ class FAQAgent:
         return ask
 
     def _ask(self, question: str):
+        """
+        Sends a question to the OpenAI model using a vector store for retrieval.
+
+        :param question: Input for the model.
+        :type question: str
+
+        :returns:
+            Model response text on success. Returns error on failure.
+        :rtype: Union[str, dict]
+        """
         self.logger.info("========== faq_agent._ask() called ==========")
         if not self.vector_store_id:
             self.logger.info("No vector store ID found.")
