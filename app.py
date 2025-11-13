@@ -12,6 +12,10 @@ import json
 import uuid
 import os
 
+from helpers import ensure_chat_history_table_ready, save_convo
+from datetime import datetime
+import pytz
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -21,6 +25,8 @@ st.set_page_config(
     page_title="MechaniGo Chatbot",
     layout="wide"
 )
+
+PH_TZ = pytz.timezone("Asia/Manila")
 
 def init_bq_client(credentials_file: str, dataset_id: str):
     try:
@@ -38,7 +44,7 @@ def init_bq_client(credentials_file: str, dataset_id: str):
         return client
     except Exception as e:
         st.error(f"Failed to initialize BigQuery: {e}")
-        return None
+        return
 
 def load_secrets():
     api_key = None
@@ -84,12 +90,30 @@ async def handle_user_input(agent: MechaniGoAgent, message: str):
 def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+        st.session_state.last_saved = 0
 
     if "agent" not in st.session_state:
-        api_key = load_secrets()
+        try:
+            api_key = load_secrets()
+        except Exception as e:
+            logging.error(f"OpenAI API key did not load: {e}")
+            st.error(f"Error loading OpenAI API key: {e}")
+            st.stop()
+
+        if not api_key:
+            st.error("OpenAI API key is missing.")
+            st.stop()
 
         if "bq_client" not in st.session_state:
             st.session_state.bq_client = init_bq_client('google_creds.json', DATASET_NAME)
+        
+        if not st.session_state.bq_client:
+            st.error("BigQuery client is not available.")
+            st.stop()
+
+        if not st.session_state.get("chat_table_ready"):
+            ensure_chat_history_table_ready(st.session_state.bq_client)
+            st.session_state.chat_table_ready = True
 
         if "context" not in st.session_state:
             st.session_state.context = MechaniGoContext(
@@ -109,32 +133,70 @@ def main():
         )
 
     if st.button("Reset"):
-        st.session_state.agent = None
+        st.session_state.pop("agent", None)
+        st.session_state.pop("context", None)
+        st.session_state.last_saved = 0
         st.session_state.chat_history = []
         st.info("Cleared cache for this session.")
 
     st.title("MechaniGo.ph Chatbot")
     st.caption("Helpful AI assistant for MechaniGo customer service and customers.")
 
-    for role, msg in st.session_state.chat_history:
-        with st.chat_message(role):
-            st.markdown(msg)
+    history_container = st.container()
+    with history_container:
+        for entry in st.session_state.chat_history:
+            with st.chat_message(entry["role"]):
+                st.markdown(entry["message"])
 
     if user_input := st.chat_input("Ask MechaniGo bot..."):
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        user_ts = datetime.now(tz=PH_TZ)
+        logging.info(f"user_ts: {user_ts}")
+        st.session_state.chat_history.append({
+            "role": "user",
+            "message": user_input,
+            "timestamp": user_ts
+        })
 
-        st.session_state.chat_history.append(("user", user_input))
+        with history_container:
+            st.chat_message("user").markdown(user_input)
+            assistant_placeholder = st.chat_message("assistant")
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    response = asyncio.run(handle_user_input(st.session_state.agent, user_input))
-                    st.markdown(response)
-                    st.session_state.chat_history.append(("assistant", response))
-                except InputGuardrailTripwireTriggered:
-                    st.error("Sorry we cannot process your message right now.")
-                except Exception as e:
-                    st.error(f"Exception occurred: {e}")
+        try:
+            with history_container, st.spinner("Thinking..."):
+                response = asyncio.run(handle_user_input(st.session_state.agent, user_input))
+                assistant_ts = datetime.now(tz=PH_TZ)
+                logging.info(f"assistant_ts: {assistant_ts}")
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "message": response,
+                    "timestamp": assistant_ts
+                })
+
+            with history_container:
+                assistant_placeholder.markdown(response)
+        except InputGuardrailTripwireTriggered:
+            st.error("Sorry we cannot process your message right now.")
+        except Exception as e:
+            st.error(f"Exception occurred: {e}")
+    
+    unsaved = st.session_state.chat_history[st.session_state.last_saved:]
+    if unsaved:
+        if not st.session_state.bq_client:
+            st.warning("BigQuery client not initalized; Conversation not saved.")
+        else:
+            try:
+                import traceback
+                save_convo(
+                    bq_client=st.session_state.bq_client,
+                    dataset_id=DATASET_NAME,
+                    table_name="chatbot_chat_history_test",
+                    uid=st.session_state.context.user_ctx.user_memory.uid,
+                    entries=unsaved
+                )
+            except Exception as e:
+                traceback.print_exc()
+                st.error(f"Failed to save chat history: {e}")
+            else:
+                st.session_state.last_saved = len(st.session_state.chat_history)
 
 main()
