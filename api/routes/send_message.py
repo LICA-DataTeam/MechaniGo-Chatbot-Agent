@@ -1,6 +1,4 @@
 from api.common import (
-    InputGuardrailTripwireTriggered,
-    SQLiteSession,
     JSONResponse,
     BaseModel,
     APIRouter,
@@ -10,9 +8,12 @@ from api.common import (
 )
 
 from api.routes.utils import run as run_chatbot
+from components.utils import SessionHandler
 from datetime import datetime
-from uuid import uuid4
 import logging
+
+# for testing
+from config import DATASET_NAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,36 +32,28 @@ async def send(
     payload: UserMessage,
     session_id: str = Query(None, description="Session ID for context")
 ):
+    sender_ts = datetime.now(tz=PH_TZ)
     try:
-        if session_id:
-            session = SQLiteSession(session_id=session_id, db_path="conversations.db")
-        else:
-            session = SQLiteSession(session_id=str(uuid4()), db_path="conversations.db")
-            session_id = session.session_id
-    except Exception as e:
-        logging.error(f"Error initializing session: {e}")
-        return JSONResponse(
-            content={
-                "status": "Error initializing session."
-            },
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        session = SessionHandler(
+            session_id=session_id,
+            dataset_id=DATASET_NAME,
+            table_name="chatbot_api_test"
         )
-
-    try:
+        session.current_turn_ts = sender_ts
         response = await run_chatbot(inquiry=payload.message, session=session)
         return JSONResponse(
             content={
                 "status": "Success",
-                "sender_ts": datetime.now(tz=PH_TZ).isoformat(),
+                "sender_ts": sender_ts.isoformat(),
                 "data": {
                     "sender_message": payload.message,
-                    "session_id": session_id,
+                    "session_id": session.session_id,
                     "response": response
                 }
             }
         )
     except Exception as e:
-        logging.info(f"Exception: {e}")
+        logging.error(f"Exception occurred: {e}")
         return JSONResponse(
             content={
                 "status": "Error"
