@@ -6,6 +6,7 @@ from schemas import User
 import pandas as pd
 import logging
 import json
+import uuid
 
 logging.basicConfig(
     level=logging.INFO,
@@ -223,3 +224,46 @@ class BigQueryClient:
 
         job = self.client.load_table_from_json(list(rows), table_ref, job_config=job_config)
         return job
+
+    def upsert_json(
+        self,
+        rows: List[Dict[str, Any]],
+        table_name: str,
+        key_col: Sequence[str],
+        schema: Sequence[bigquery.SchemaField]
+    ):
+        if not rows:
+            return None
+
+        dataset_ref = bigquery.DatasetReference(self.client.project, self.dataset_id)
+        temp_table = bigquery.TableReference(dataset_ref, f"tmp_{str(uuid.uuid4().hex)}")
+
+        self.ensure_table(temp_table.table_id, schema)
+        job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", schema=list(schema))
+        self.client.load_table_from_json(rows, temp_table, job_config=job_config).result()
+
+        key_join = " AND ".join([f"T.{col}=S.{col}" for col in key_col])
+        update_set = ", ".join([f"{field.name}=S.{field.name}" for field in schema if field.name not in key_col])
+        insert_cols = ", ".join([field.name for field in schema])
+        insert_vals = ", ".join([f"S.{field.name}" for field in schema])
+
+        merge_sql = """
+        MERGE `{}.{}.{}` AS T
+        USING `{}.{}.{}` AS S
+        ON {}
+        WHEN MATCHED THEN UPDATE SET {}
+        WHEN NOT MATCHED THEN INSERT ({}) VALUES ({})
+        """.format(
+            self.client.project,
+            self.dataset_id,
+            table_name,
+            temp_table.project,
+            temp_table.dataset_id,
+            temp_table.table_id,
+            key_join,
+            update_set,
+            insert_cols,
+            insert_vals
+        )
+        self.client.query(merge_sql).result()
+        self.client.delete_table(temp_table, not_found_ok=True)
