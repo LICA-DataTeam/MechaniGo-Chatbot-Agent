@@ -1,6 +1,7 @@
 from components.utils.guardrails import guardrail, car_guardrail
 from components.utils.AgentFactory import create_agent
 from components.utils.bq_utils import BigQueryClient
+from components.utils.sessions import SessionHandler
 from components.utils.registry import (
     guardrail_registry,
     tool_registry,
@@ -16,5 +17,6 @@ __all__ = [
     "register_guardrail",
     "register_tool",
     "guardrail_registry",
-    "tool_registry"
+    "tool_registry",
+    "SessionHandler"
 ]
