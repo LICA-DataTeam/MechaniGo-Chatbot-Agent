@@ -1,8 +1,8 @@
 from google.cloud.bigquery import SchemaField, ScalarQueryParameter
 from agents.memory.session import SessionABC
 from components.utils import BigQueryClient
+from collections import deque, defaultdict
 from typing import List, Optional
-from collections import deque
 from datetime import datetime
 from config import PH_TZ
 from uuid import uuid4
@@ -60,7 +60,7 @@ class SessionHandler(SessionABC):
         self.cache = deque()
         self.schema = schema if schema is not None else self.get_schema()
         self.bq = BigQueryClient(credentials_file=credentials_file, dataset_id=dataset_id)
-        self.bq.ensure_table(table_name=table_name, schema=schema)
+        self.bq.ensure_table(table_name=table_name, schema=self.schema)
         self.logger.info(f"{self.__class__.__name__}.session_id: {self.session_id}")
 
     @staticmethod
@@ -95,7 +95,18 @@ class SessionHandler(SessionABC):
             query,
             params=[ScalarQueryParameter("session_id", "STRING", self.session_id)]
         )
-        return [{"role": r["role"], "content": r["content"]} for r in rows]
+        expanded = []
+        for row in rows:
+            raw = row.get("content") or "[]"
+            try:
+                messages = json.loads(raw)
+                if not isinstance(messages, list):
+                    raise ValueError
+            except Exception:
+                messages = [raw] if raw else []
+            for text in messages:
+                expanded.append({"role": row["role"], "content": text})
+        return expanded
 
     async def get_items(self, limit=None):
         items = list(self.cache)
@@ -112,29 +123,54 @@ class SessionHandler(SessionABC):
         self.cache.extend(items)
         turn_ts = getattr(self, "current_turn_ts", None)
         timestamp = (turn_ts or datetime.now(tz=PH_TZ)).astimezone(PH_TZ).replace(tzinfo=None)
-        rows = []
+        role_messages: dict[str, list[str]] = defaultdict(list)
         for item in items:
             role = item.get("role")
             if role not in {"user", "assistant"}:
                 continue
             text = self._extract_text(item)
-            if not text:
-                continue
-            rows.append({
+            if text:
+                role_messages[role].append(text)
+
+        if not role_messages:
+            return
+        
+        existing_rows = self._load_from_bq()
+        current_content = {}
+        for row in existing_rows:
+            raw = row.get("content") or ""
+            try:
+                messages = json.loads(raw)
+                if not isinstance(messages, list):
+                    raise ValueError
+            except Exception:
+                messages = [raw] if raw else []
+            current_content[row["role"]] = messages
+
+        payload = []
+        for role, new_msgs in role_messages.items():
+            combined = current_content.get(role, []).copy()
+            combined.extend(new_msgs)
+            payload.append({
                 "session_id": self.session_id,
                 "role": role,
-                "content": text,
+                "content": json.dumps(combined),
                 "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S")
             })
-        if rows:
-            self.bq.load_json(rows, table_name=self.table_name, schema=self.schema)
+
+        self.bq.upsert_json(
+            rows=payload,
+            table_name=self.table_name,
+            key_col=("session_id", "role"),
+            schema=self.schema
+        )
 
     async def pop_item(self):
         try:
             item = self.cache.pop()
         except IndexError as ie:
             self.logger.error(f"IndexError: {ie}")
-            pass # temp
+            return None
         return item
 
     async def clear_session(self):
