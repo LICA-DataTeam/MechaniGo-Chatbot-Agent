@@ -7,3 +7,5 @@ misc/
 .env
 *.json
 *.db
+*.db-shm
+*.db-wal
