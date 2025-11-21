@@ -50,6 +50,7 @@ class MechaniGoAgent:
         name: str = "MechaniGo Bot",
         model: str = "gpt-4.1",
         context: Optional[MechaniGoContext] = None,
+        session: SQLiteSession = None,
         input_guardrail: Optional[list] = None
     ):
         self.logger = logging.getLogger(__name__)
@@ -61,7 +62,11 @@ class MechaniGoAgent:
         self.table_name = table_name
         self.name = name
         self.handoff_description = DEFAULT_AGENT_HANDOFF_DESCRIPTION
-        self.session = SQLiteSession(session_id=str(uuid.uuid4()), db_path="conversations.db")
+
+        if session is None:
+            raise ValueError("Session must be provided.")
+        self.session = session
+
         self.model = model
         self.input_guardrail = input_guardrail
 
