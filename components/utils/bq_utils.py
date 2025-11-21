@@ -1,7 +1,7 @@
+from typing import List, Dict, Optional, Sequence, Iterable, Union, Any
 from google.cloud.exceptions import NotFound
 from google.oauth2 import service_account
 from google.cloud import bigquery
-from typing import List, Optional
 from schemas import User
 import pandas as pd
 import logging
@@ -185,3 +185,41 @@ class BigQueryClient:
         except Exception as e:
             self.logger.error(f"Failed to upsert user: {e}")
             raise
+
+    def query_to_json(self, sql: str, params: Optional[Sequence[bigquery.ScalarQueryParameter]] = None):
+        job_config = bigquery.QueryJobConfig(query_parameters=params or [])
+        rows = self.client.query(sql, job_config=job_config).result()
+        return [dict(row.items()) for row in rows]
+
+    def load_json(
+        self,
+        rows: Union[List[Dict[str, Any]], Iterable[Dict[str, Any]]],
+        write_disposition: str = "WRITE_APPEND",
+        table_name: str = None,
+        schema: Optional[Sequence[bigquery.SchemaField]] = None,
+        autodetect: bool = False,
+        create_if_needed: bool = True,
+        ignore_unknown_values: bool = True
+    ):
+        if not table_name:
+            raise ValueError("Table name is required!")
+
+        if create_if_needed:
+            if not schema and not autodetect:
+                raise ValueError("Table missing. Provide `schema` or set `autodetect=True`.")
+            self.ensure_table(table_name=table_name, schema=schema)
+
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=write_disposition,
+            ignore_unknown_values=ignore_unknown_values,
+            autodetect=autodetect
+        )
+
+        if schema is not None:
+            job_config.schema = list(schema)
+
+        dataset_ref = bigquery.DatasetReference(self.client.project, self.dataset_id)
+        table_ref = bigquery.TableReference(dataset_ref, table_name)
+
+        job = self.client.load_table_from_json(list(rows), table_ref, job_config=job_config)
+        return job
