@@ -1,9 +1,9 @@
 from components.agent_tools import UserInfoAgentContext, MechanicAgentContext, BookingAgentContext
 from helpers import ensure_chat_history_table_ready, save_convo
+from components.utils import BigQueryClient, SessionHandler
 from components import MechaniGoAgent, MechaniGoContext
 from agents import InputGuardrailTripwireTriggered
 from config import TEST_TABLE_NAME, DATASET_NAME # change table name later
-from components.utils import BigQueryClient
 from agents import set_default_openai_key
 from schemas import User, UserCarDetails
 from datetime import datetime
@@ -115,6 +115,9 @@ def main():
             ensure_chat_history_table_ready(st.session_state.bq_client)
             st.session_state.chat_table_ready = True
 
+        if "session_id" not in st.session_state:
+            st.session_state.session_id = str(uuid.uuid4())
+
         if "context" not in st.session_state:
             st.session_state.context = MechaniGoContext(
                 user_ctx=UserInfoAgentContext(
@@ -125,11 +128,21 @@ def main():
                 ),
                 booking_ctx=BookingAgentContext()
             )
+
+        if "session" not in st.session_state:
+            st.session_state.session = SessionHandler(
+                session_id=st.session_state.session_id,
+                dataset_id="conversations",
+                table_name="chatbot_api_test",
+                bq_client=st.session_state.bq_client
+            )
+
         st.session_state.agent = MechaniGoAgent(
             api_key=api_key,
             bq_client=st.session_state.bq_client,
             table_name=TEST_TABLE_NAME,
-            context=st.session_state.context
+            context=st.session_state.context,
+            session=st.session_state.session
         )
 
     if st.button("Reset"):
@@ -168,12 +181,12 @@ def main():
                 logging.info(f"assistant_ts: {assistant_ts}")
                 st.session_state.chat_history.append({
                     "role": "assistant",
-                    "message": response,
+                    "message": response["text"],
                     "timestamp": assistant_ts
                 })
 
             with history_container:
-                assistant_placeholder.markdown(response)
+                assistant_placeholder.markdown(response["text"])
         except InputGuardrailTripwireTriggered:
             st.error("Sorry we cannot process your message right now.")
         except Exception as e:
