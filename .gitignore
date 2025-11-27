@@ -3,6 +3,7 @@ env/
 misc/
 .streamlit/
 .devcontainer/
+tests/
 
 .env
 *.json
