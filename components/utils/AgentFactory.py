@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Literal
 
 from agents import Agent
 from components.utils.registry import guardrail_registry, tool_registry
@@ -42,7 +42,8 @@ def create_agent(
     tool_names: Optional[Iterable[str]] = None,
     input_guardrails: Optional[Iterable[Any]] = None,
     guardrail_names: Optional[Iterable[str]] = None,
-    model_settings = None
+    model_settings = None,
+    tool_use_behavior: Literal["run_llm_again", "stop_on_first_tool"] = "run_llm_again"
 ) -> Agent:
     openai.api_key = api_key
     resolved_tools = _resolve_tools(tools, tool_names)
@@ -56,5 +57,6 @@ def create_agent(
         model=model,
         tools=resolved_tools,
         input_guardrails=resolved_guardrails,
-        model_settings=model_settings
+        model_settings=model_settings,
+        tool_use_behavior=tool_use_behavior
     )
