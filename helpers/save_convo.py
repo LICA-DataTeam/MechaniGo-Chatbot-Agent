@@ -32,11 +32,11 @@ def ensure_chat_history_table_ready(bq_client: BigQueryClient, table_name: str =
     logging.info("Done!")
 
 def save_convo(
-    bq_client: BigQueryClient,
     dataset_id: str,
     table_name: str,
     uid: str,
-    entries: Iterable[dict]
+    entries: Iterable[dict],
+    bq_client: BigQueryClient=None
 ) -> None:
     """
     Saves a conversation history (iterable) to a specifed BigQuery table.
@@ -58,7 +58,8 @@ def save_convo(
     :returns: None
     """
     if bq_client is None:
-        raise ValueError("Missing BigQuery client instance.")
+        logging.warning("Missing BigQuery client! Creating new one...")
+        bq_client = BigQueryClient("google_creds.json", "conversations")
     if not isinstance(bq_client, BigQueryClient):
         raise TypeError(f"Expected BigQueryClient instance, got {type(bq_client).__name__}")
 
