@@ -42,6 +42,7 @@ def create_agent(
     tool_names: Optional[Iterable[str]] = None,
     input_guardrails: Optional[Iterable[Any]] = None,
     guardrail_names: Optional[Iterable[str]] = None,
+    model_settings = None
 ) -> Agent:
     openai.api_key = api_key
     resolved_tools = _resolve_tools(tools, tool_names)
@@ -55,4 +56,5 @@ def create_agent(
         model=model,
         tools=resolved_tools,
         input_guardrails=resolved_guardrails,
+        model_settings=model_settings
     )

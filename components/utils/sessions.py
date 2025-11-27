@@ -50,8 +50,8 @@ class SessionHandler(SessionABC):
         *,
         dataset_id: Optional[str] = None,
         table_name: Optional[str] = None,
-        credentials_file: str = "google_creds.json",
-        schema: Optional[List[SchemaField]] = None
+        schema: Optional[List[SchemaField]] = None,
+        bq_client: BigQueryClient = None
     ):
         self.logger = logging.getLogger(__name__)
         self.session_id = session_id if session_id is not None else str(uuid4())
@@ -59,8 +59,8 @@ class SessionHandler(SessionABC):
         self.table_name = table_name
         self.cache = deque()
         self.schema = schema if schema is not None else self.get_schema()
-        self.bq = BigQueryClient(credentials_file=credentials_file, dataset_id=dataset_id)
-        self.bq.ensure_table(table_name=table_name, schema=self.schema)
+        self.bq_client = bq_client or BigQueryClient(credentials_file="google_creds.json", dataset_id=dataset_id)
+        self.bq_client.ensure_table(table_name=table_name, schema=self.schema)
         self.logger.info(f"{self.__class__.__name__}.session_id: {self.session_id}")
 
     @staticmethod
@@ -90,8 +90,8 @@ class SessionHandler(SessionABC):
         query = "SELECT *" \
         "FROM `{}.{}.{}`" \
         "WHERE session_id = @session_id" \
-        "{}".format(self.bq.client.project, self.bq.dataset_id, self.table_name, limit_clause)
-        rows = self.bq.query_to_json(
+        "{}".format(self.bq_client.client.project, self.bq_client.dataset_id, self.table_name, limit_clause)
+        rows = self.bq_client.query_to_json(
             query,
             params=[ScalarQueryParameter("session_id", "STRING", self.session_id)]
         )
@@ -158,7 +158,7 @@ class SessionHandler(SessionABC):
                 "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S")
             })
 
-        self.bq.upsert_json(
+        self.bq_client.upsert_json(
             rows=payload,
             table_name=self.table_name,
             key_col=("session_id", "role"),
