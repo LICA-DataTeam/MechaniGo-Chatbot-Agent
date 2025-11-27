@@ -8,6 +8,8 @@ from components.utils import create_agent, register_tool
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from agents.model_settings import ModelSettings
+
 load_dotenv()
 
 LOGGER = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ class FAQAgent:
 
         self.logger.setLevel(logging.INFO)
         self._ask_tool = self._create_ask_tool()
+        model_settings = ModelSettings(max_tokens=1000)
 
         self.agent = create_agent(
             api_key=self.api_key,
@@ -49,6 +52,7 @@ class FAQAgent:
             ),
             model=self.model,
             tools=[self._ask_tool],
+            model_settings=model_settings
         )
 
         self._orchestrator_tool = self.agent.as_tool(

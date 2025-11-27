@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from agents import Agent
 import logging
 
+from agents.model_settings import ModelSettings
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -32,13 +34,16 @@ class BookingAgent:
         extract_schedule = self._create_ctx_extract_sched()
         extract_payment_type = self._create_ctx_extract_payment_type()
         extract_service_type = self._create_ctx_extract_service()
+        model_settings = ModelSettings(max_tokens=1000)
+
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
             handoff_description=self.description,
             instructions=self._dynamic_instructions,
             model=self.model,
-            tools=[extract_schedule, extract_payment_type, extract_service_type]
+            tools=[extract_schedule, extract_payment_type, extract_service_type],
+            model_settings=model_settings
         )
 
         self._orchestrator_tool = self.agent.as_tool(

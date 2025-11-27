@@ -8,6 +8,8 @@ from schemas import User
 import traceback
 import logging
 
+from agents.model_settings import ModelSettings
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -36,6 +38,8 @@ class UserInfoAgent:
         extract_user_info = self._create_ctx_extract_user_tool()
         get_user_info = self._create_ctx_get_user_tool()
 
+        model_settings = ModelSettings(max_tokens=1000)
+
         self.agent = create_agent(
             api_key=self.api_key,
             name=self.name,
@@ -51,6 +55,7 @@ class UserInfoAgent:
             output_type=User,
             model=self.model,
             tools=[extract_user_info, get_user_info],
+            model_settings=model_settings
         )
 
         self._orchestrator_tool = self.agent.as_tool(
