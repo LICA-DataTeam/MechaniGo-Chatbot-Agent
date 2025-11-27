@@ -12,6 +12,7 @@ from api.common import (
 from google.cloud.bigquery import SchemaField, ScalarQueryParameter
 from agents import SQLiteSession
 from datetime import datetime
+from utils import track_phase
 import streamlit as st
 import logging
 import uuid
@@ -126,7 +127,7 @@ def _persist_context(bq: BigQueryClient, session_id: str, ctx: MechaniGoContext)
         schema=CONTEXT_SCHEMA
     )
 
-async def run(inquiry: str, session: SQLiteSession = None):
+async def run(inquiry: str, session: SQLiteSession = None, bq_client: BigQueryClient = None):
     """
     Main entry-point for the calling the chatbot.
 
@@ -136,21 +137,22 @@ async def run(inquiry: str, session: SQLiteSession = None):
     :param session: Session object that maintains state across interactions.
     :type session: SQLiteSession
     """
-    api_key = _load_secrets()
+    with track_phase("load_secrets", session_id=session.session_id if session else None):
+        api_key = _load_secrets()
     if not api_key:
         logging.error("OpenAI API key is missing.")
         raise RuntimeError("OpenAI API key not configured.")
 
-    bq_client = _init_bq_client("google_creds.json", DATASET_NAME)
     if not bq_client:
-        logging.error("BigQuery client is not available.")
-        return
+        bq_client = _init_bq_client("google_creds.json", DATASET_NAME)
+        logging.error("Chatbot: BigQuery client is not available.")
 
     if not session:
         raise ValueError("Session object missing.")
 
     try:
-        ctx = _hydrate_context(bq_client, session.session_id)
+        with track_phase("hydrate_context", session_id=session.session_id if session else None):
+            ctx = _hydrate_context(bq_client, session.session_id)
 
         if not session:
             raise ValueError("Session object missing.")
@@ -162,8 +164,10 @@ async def run(inquiry: str, session: SQLiteSession = None):
             context=ctx,
             session=session
         )
-        result = await agent.inquire(inquiry=inquiry)
-        _persist_context(bq_client, session.session_id, ctx)
+        with track_phase("mgo_agent_inquire", session_id=session.session_id if session else None):
+            result = await agent.inquire(inquiry=inquiry)
+        with track_phase("persist_context", session_id=session.session_id if session else None):
+            _persist_context(bq_client, session.session_id, ctx)
         return result
     except InputGuardrailTripwireTriggered:
         logging.error("Input Guardrail Tripwire triggered!")
