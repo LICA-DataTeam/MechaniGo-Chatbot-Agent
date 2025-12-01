@@ -4,7 +4,8 @@ from api.common import (
     APIRouter,
     PH_TZ,
     status,
-    Query
+    Query,
+    Request
 )
 from utils import (
     record_session_tokens,
@@ -38,8 +39,10 @@ class UserMessage(BaseModel):
 @router.post("/send-message")
 async def send(
     payload: UserMessage,
+    request: Request,
     session_id: str = Query(None, description="Session ID for context")
 ):
+    metrics_sink = request.app.state.metrics_sink
     sender_ts = datetime.now(tz=PH_TZ)
     start = time.perf_counter()
     try:
@@ -47,13 +50,18 @@ async def send(
         session = SessionHandler(
             session_id=session_id,
             dataset_id=DATASET_NAME,
-            table_name="chatbot_api_test"
+            table_name="chatbot_api_test",
+            bq_client=metrics_sink.client
         )
         record_session(session_id=session.session_id)
         session.current_turn_ts = sender_ts
-        response = await run_chatbot(inquiry=payload.message, session=session)
-        if "usage" in response:
+        response = await run_chatbot(inquiry=payload.message, session=session, bq_client=metrics_sink.client)
+        if usage := response.get("usage"):
             record_session_tokens(session.session_id, response["usage"])
+            metrics_sink.record_usage(
+                session_id=session.session_id,
+                usage=usage
+            )
         try:
             chat_history = [
                 {"role": "user", "message": payload.message, "timestamp": sender_ts},
@@ -63,11 +71,18 @@ async def send(
                 dataset_id=DATASET_NAME,
                 table_name="chatbot_chat_history_test_2",
                 uid=session.session_id,
-                entries=chat_history
+                entries=chat_history,
+                bq_client=metrics_sink.client
             )
         except Exception as e:
             logging.error(f"Exception while saving: {e}")
-        record_response_time(start)
+        elapsed = record_response_time(start)
+        metrics_sink.record_session(
+            session_id=session.session_id,
+            request_ts=sender_ts,
+            response_latency_ms=int(elapsed*1000),
+            status="success"
+        )
         return JSONResponse(
             content={
                 "status": "Success",
@@ -83,6 +98,12 @@ async def send(
         import traceback
         traceback.print_exc()
         logging.error(f"Exception occurred: {e}")
+        metrics_sink.record_session(  # optional failure logging
+            session_id=session.session_id if "session" in locals() else session_id or "",
+            request_ts=sender_ts,
+            response_latency_ms=int((time.perf_counter() - start) * 1000),
+            status="error",
+        )
         return JSONResponse(
             content={
                 "status": "Error"

@@ -1,4 +1,4 @@
-from fastapi import Query, APIRouter, HTTPException, status
+from fastapi import Query, APIRouter, HTTPException, Depends, Request, status
 from fastapi.responses import JSONResponse
 from components.agent_tools import (
     UserInfoAgentContext, MechanicAgentContext, BookingAgentContext
@@ -15,7 +15,7 @@ import pytz
 PH_TZ = pytz.timezone("Asia/Manila")
 
 __all__ = [
-    "HTTPException", "JSONResponse", "APIRouter", "status", "Query",
+    "HTTPException", "JSONResponse", "APIRouter", "status", "Query", "Depends", "Request",
     "UserInfoAgentContext", "MechanicAgentContext", "BookingAgentContext", "SQLiteSession",
     "BigQueryClient", "User", "UserCarDetails", "set_default_openai_key",
     "ensure_chat_history_table_ready", "save_convo",

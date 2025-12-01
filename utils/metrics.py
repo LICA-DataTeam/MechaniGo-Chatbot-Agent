@@ -34,6 +34,7 @@ def record_session(session_id: str):
 
 def record_response_time(start_time: float):
     metrics_dict["response_time"] = time.perf_counter() - start_time
+    return metrics_dict["response_time"]
 
 def record_session_tokens(session_id: str, usage: dict):
     if session_id not in session_token_usage:
