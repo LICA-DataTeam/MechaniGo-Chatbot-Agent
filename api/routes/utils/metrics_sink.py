@@ -26,8 +26,9 @@ class BigQueryMetricsSink:
     def _session_schema():
         return [
             bigquery.SchemaField("session_id", "STRING"),
-            bigquery.SchemaField("request_ts", "TIMESTAMP"),
-            bigquery.SchemaField("response_latency_ms", "INT64"),
+            bigquery.SchemaField("request_count", "INT64"),
+            bigquery.SchemaField("request_ts", "DATETIME"),
+            bigquery.SchemaField("response_latency", "FLOAT64"),
             bigquery.SchemaField("status", "STRING"),
             bigquery.SchemaField("extra_json", "JSON")
         ]
@@ -36,29 +37,25 @@ class BigQueryMetricsSink:
     def _usage_schema():
         return [
             bigquery.SchemaField("session_id", "STRING"),
-            bigquery.SchemaField("turn_index", "INT64"),
             bigquery.SchemaField("input_tokens", "INT64"),
             bigquery.SchemaField("output_tokens", "INT64"),
             bigquery.SchemaField("total_tokens", "INT64"),
             bigquery.SchemaField("logged_at", "DATETIME")
         ]
 
-    def poo(self):
-        return "Hi, I am poo"
-
     def record_session(
         self,
         *,
         session_id: str,
         request_ts: datetime,
-        response_latency_ms: int,
+        response_latency: float,
         status: str = "success",
         extra: Optional[Dict[str, Any]] = None
     ) -> None:
         row = {
             "session_id": session_id,
-            "request_ts": request_ts.isoformat(),
-            "response_latency_ms": response_latency_ms,
+            "request_ts": request_ts.strftime("%Y-%m-%d %H:%M:%S"),
+            "response_latency": round(response_latency, 2),
             "status": status,
             "extra_json": extra or {}
         }

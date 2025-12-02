@@ -80,13 +80,13 @@ async def send(
         metrics_sink.record_session(
             session_id=session.session_id,
             request_ts=sender_ts,
-            response_latency_ms=int(elapsed*1000),
+            response_latency=elapsed,
             status="success"
         )
         return JSONResponse(
             content={
                 "status": "Success",
-                "sender_ts": sender_ts.isoformat(),
+                "sender_ts": sender_ts.strftime("%Y-%m-%d %H:%M:%S"),
                 "data": {
                     "sender_message": payload.message,
                     "session_id": session.session_id,
@@ -101,7 +101,7 @@ async def send(
         metrics_sink.record_session(  # optional failure logging
             session_id=session.session_id if "session" in locals() else session_id or "",
             request_ts=sender_ts,
-            response_latency_ms=int((time.perf_counter() - start) * 1000),
+            response_latency=time.perf_counter() - start,
             status="error",
         )
         return JSONResponse(
