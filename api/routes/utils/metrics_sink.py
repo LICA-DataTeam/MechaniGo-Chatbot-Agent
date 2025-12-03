@@ -37,6 +37,7 @@ class BigQueryMetricsSink:
     def _usage_schema():
         return [
             bigquery.SchemaField("session_id", "STRING"),
+            bigquery.SchemaField("model", "STRING"),
             bigquery.SchemaField("input_tokens", "INT64"),
             bigquery.SchemaField("output_tokens", "INT64"),
             bigquery.SchemaField("total_tokens", "INT64"),
@@ -54,6 +55,7 @@ class BigQueryMetricsSink:
     ) -> None:
         row = {
             "session_id": session_id,
+            "request_count": extra["request_count"],
             "request_ts": request_ts.strftime("%Y-%m-%d %H:%M:%S"),
             "response_latency": round(response_latency, 2),
             "status": status,
@@ -70,10 +72,12 @@ class BigQueryMetricsSink:
         self,
         *,
         session_id: str,
-        usage: Dict[str, int]
+        usage: Dict[str, int],
+        model: str
     ) -> None:
         row = {
             "session_id": session_id,
+            "model": model,
             "input_tokens": usage.get("input_tokens", 0),
             "output_tokens": usage.get("output_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
