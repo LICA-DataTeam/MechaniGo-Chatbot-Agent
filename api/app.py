@@ -2,11 +2,15 @@ from api import send_msg_router, fetch_metrics_router
 from api.routes.utils import BigQueryMetricsSink
 from components.utils import BigQueryClient
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 from fastapi import FastAPI
+import os
 
+load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     client = BigQueryClient(credentials_file="google_creds.json", dataset_id="conversations")
+    app.state.api_key = os.getenv("OPENAI_API_KEY")
     app.state.metrics_sink = BigQueryMetricsSink(
         client=client,
         dataset_id="conversations",
