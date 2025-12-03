@@ -310,6 +310,10 @@ class MechaniGoAgent:
             self.logger.info("User profile still incomplete, skipping BigQuery save.")
         return {
             "text": response.final_output,
+            "model": self.agent.model,
+            "model_settings": {
+                "max_tokens": self.agent.model_settings.max_tokens
+            },
             "usage": {
                 "input_tokens": response.raw_responses[0].usage.input_tokens,
                 "output_tokens": response.raw_responses[0].usage.output_tokens,

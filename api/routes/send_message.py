@@ -12,6 +12,7 @@ from utils import (
     record_response_time,
     record_request,
     record_session,
+    get_metrics
 )
 
 from api.routes.utils import run as run_chatbot
@@ -55,12 +56,14 @@ async def send(
         )
         record_session(session_id=session.session_id)
         session.current_turn_ts = sender_ts
-        response = await run_chatbot(inquiry=payload.message, session=session, bq_client=metrics_sink.client)
+        response = await run_chatbot(api_key=request.app.state.api_key, inquiry=payload.message, session=session, bq_client=metrics_sink.client)
+        model = response.get("model")
         if usage := response.get("usage"):
             record_session_tokens(session.session_id, response["usage"])
             metrics_sink.record_usage(
                 session_id=session.session_id,
-                usage=usage
+                usage=usage,
+                model=model
             )
         try:
             chat_history = [
@@ -81,7 +84,10 @@ async def send(
             session_id=session.session_id,
             request_ts=sender_ts,
             response_latency=elapsed,
-            status="success"
+            status="success",
+            extra={
+                "request_count": get_metrics().get("request_count")
+            }
         )
         return JSONResponse(
             content={
