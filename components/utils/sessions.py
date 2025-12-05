@@ -60,6 +60,8 @@ class SessionHandler(SessionABC):
         self.cache = deque()
         self.schema = schema if schema is not None else self.get_schema()
         self.bq_client = bq_client or BigQueryClient(credentials_file="google_creds.json", dataset_id=dataset_id)
+        self.context_cache = None # MechaniGoContext
+        self.context_dirty = False
         self.bq_client.ensure_table(table_name=table_name, schema=self.schema)
         self.logger.info(f"{self.__class__.__name__}.session_id: {self.session_id}")
 

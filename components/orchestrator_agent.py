@@ -292,6 +292,9 @@ class MechaniGoAgent:
             context=self.context,
             session=self.session
         )
+
+        # marked "dirty" whenever context changes
+        self.session.context_dirty = True
         
         new_email = (self.context.user_ctx.user_memory.email or "").strip()
         if new_email and new_email != prev_email:

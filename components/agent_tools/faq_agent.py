@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
+from utils import track_phase
 from agents import function_tool
 from components.utils import create_agent, register_tool
 from dotenv import load_dotenv
@@ -98,26 +99,27 @@ class FAQAgent:
             Model response text on success. Returns error on failure.
         :rtype: Union[str, dict]
         """
-        self.logger.info("========== faq_agent._ask() called ==========")
-        if not self.vector_store_id:
-            self.logger.info("No vector store ID found.")
-            return {
-                "status": "error",
-                "message": "No vector store ID found.",
-            }
+        with track_phase("faq_agent.ask", session_id="None"):
+            self.logger.info("========== faq_agent._ask() called ==========")
+            if not self.vector_store_id:
+                self.logger.info("No vector store ID found.")
+                return {
+                    "status": "error",
+                    "message": "No vector store ID found.",
+                }
 
-        try:
-            response = self.openai_client.responses.create(
-                model=self.model,
-                input=question,
-                tools=[{"type": "file_search", "vector_store_ids": [self.vector_store_id]}],
-                max_tool_calls=5,
-                temperature=0,
-            )
-            return response.output_text
-        except Exception as exc:  # pragma: no cover - network errors
-            self.logger.error("Exception occurred while answering FAQs: %s", exc)
-            return {
-                "status": "error",
-                "message": "Error retrieving FAQ answer.",
-            }
+            try:
+                response = self.openai_client.responses.create(
+                    model=self.model,
+                    input=question,
+                    tools=[{"type": "file_search", "vector_store_ids": [self.vector_store_id]}],
+                    max_tool_calls=5,
+                    temperature=0,
+                )
+                return response.output_text
+            except Exception as exc:  # pragma: no cover - network errors
+                self.logger.error("Exception occurred while answering FAQs: %s", exc)
+                return {
+                    "status": "error",
+                    "message": "Error retrieving FAQ answer.",
+                }

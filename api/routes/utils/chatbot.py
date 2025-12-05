@@ -10,11 +10,13 @@ from api.common import (
 )
 
 from google.cloud.bigquery import SchemaField, ScalarQueryParameter
+from starlette.concurrency import run_in_threadpool
 from agents import SQLiteSession
 from datetime import datetime
 from utils import track_phase
 import streamlit as st
 import logging
+import asyncio
 import uuid
 import json
 import os
@@ -127,7 +129,7 @@ def _persist_context(bq: BigQueryClient, session_id: str, ctx: MechaniGoContext)
         schema=CONTEXT_SCHEMA
     )
 
-async def run(inquiry: str, session: SQLiteSession = None, bq_client: BigQueryClient = None):
+async def run(api_key: str, inquiry: str, session: SQLiteSession = None, bq_client: BigQueryClient = None):
     """
     Main entry-point for the calling the chatbot.
 
@@ -137,8 +139,6 @@ async def run(inquiry: str, session: SQLiteSession = None, bq_client: BigQueryCl
     :param session: Session object that maintains state across interactions.
     :type session: SQLiteSession
     """
-    with track_phase("load_secrets", session_id=session.session_id if session else None):
-        api_key = _load_secrets()
     if not api_key:
         logging.error("OpenAI API key is missing.")
         raise RuntimeError("OpenAI API key not configured.")
@@ -150,12 +150,14 @@ async def run(inquiry: str, session: SQLiteSession = None, bq_client: BigQueryCl
     if not session:
         raise ValueError("Session object missing.")
 
-    try:
-        with track_phase("hydrate_context", session_id=session.session_id if session else None):
-            ctx = _hydrate_context(bq_client, session.session_id)
+    if getattr(session, "context_cache", None) is None:
+        with track_phase("hydrate_context", session_id=session.session_id):
+            session.context_cache = _hydrate_context(bq_client, session.session_id)
 
-        if not session:
-            raise ValueError("Session object missing.")
+    ctx = session.context_cache
+    session.context_dirty = False
+
+    try:
 
         agent = MechaniGoAgent(
             api_key=api_key,
@@ -166,8 +168,14 @@ async def run(inquiry: str, session: SQLiteSession = None, bq_client: BigQueryCl
         )
         with track_phase("mgo_agent_inquire", session_id=session.session_id if session else None):
             result = await agent.inquire(inquiry=inquiry)
-        with track_phase("persist_context", session_id=session.session_id if session else None):
-            _persist_context(bq_client, session.session_id, ctx)
+
+        if session.context_dirty:
+            async def persist_ctx():
+                with track_phase("persist_context", session_id=session.session_id):
+                    await run_in_threadpool(_persist_context, bq_client, session.session_id, ctx)
+
+            asyncio.create_task(persist_ctx())
+            session.context_dirty = False
         return result
     except InputGuardrailTripwireTriggered:
         logging.error("Input Guardrail Tripwire triggered!")
