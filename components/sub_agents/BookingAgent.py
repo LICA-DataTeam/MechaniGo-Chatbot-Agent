@@ -104,7 +104,6 @@ class BookingAgent(AgentFactory):
         return "Handles user info extraction and booking services."
 
     def get_instructions(self):
-        print(self.dynamic_instructions())
         return self.dynamic_instructions()
 
     def get_tools(self):
