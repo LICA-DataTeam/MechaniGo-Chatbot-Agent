@@ -141,7 +141,9 @@ class MechaniGoAgent(AgentFactory):
         return self.instructions.format(name=self.get_name())
     
     def get_tools(self):
-        return super().get_tools()
+        return [
+            ToolRegistry.get_tool("knowledge.faq_tool")
+        ]
 
     def get_input_guardrails(self):
         return [mechanigo_guardrail]
