@@ -129,7 +129,7 @@ class MechanicAgent(AgentFactory):
     @property
     def as_tool(self):
         if self.orchestrator_tool is None:
-            self.orchestrator_tool = self.create().as_tool(
+            self.orchestrator_tool = self.build().as_tool(
                 tool_name=self.get_name(),
                 tool_description=self.get_handoff_description()
             )
