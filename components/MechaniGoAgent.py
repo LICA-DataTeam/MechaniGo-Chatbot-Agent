@@ -1,5 +1,5 @@
 from components.common import (
-    ModelSettings, Runner,
+    ModelSettings, Runner, Agent,
     TResponseInputItem
 )
 
@@ -156,7 +156,7 @@ class MechaniGoAgent(AgentFactory):
             temperature=self.temperature
         )
 
-    def builder(self):
+    def builder(self) -> Agent:
         self.agent = super().build()
         return self.agent
 
@@ -176,7 +176,7 @@ class MechaniGoAgent(AgentFactory):
         and surfaces token usage from the first raw response.
         """
         response = await Runner.run(
-            starting_agent=self.build(),
+            starting_agent=self.builder(),
             input=inquiry,
             context=self.context,
             session=self.session
