@@ -142,6 +142,8 @@ class MechaniGoAgent(AgentFactory):
     
     def get_tools(self):
         return [
+            ToolRegistry.get_tool("booking_agent"),
+            ToolRegistry.get_tool("mechanic_agent"),
             ToolRegistry.get_tool("knowledge.faq_tool")
         ]
 
