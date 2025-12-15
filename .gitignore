@@ -1,0 +1,13 @@
+__pycache__/
+misc/
+tests/
+env/
+data/
+
+.env
+.env.dev
+.env.prod
+.env.local
+*.db
+
+google_creds.json
