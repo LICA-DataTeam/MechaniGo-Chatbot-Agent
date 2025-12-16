@@ -42,7 +42,9 @@ $env:ENVIRONMENT="development"
 
 - [x] `BookingAgent`
 
-    - [ ] Fix save functionality for booking ([ADD-233](https://lica-group.atlassian.net/browse/ADD-233))
+    - [x] Fix save functionality for booking ([ADD-233](https://lica-group.atlassian.net/browse/ADD-233))
+
+        - [x] Strengthen `BookingAgent` prompt
 
 - [x] Implement BigQuery config for metrics tracking and analytics
 
