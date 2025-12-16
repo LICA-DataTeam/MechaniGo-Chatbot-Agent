@@ -9,7 +9,11 @@ from components.utils import (
     ToolRegistry,
     AgentFactory
 )
-from components.schemas import User
+from components.schemas import (
+    MechaniGoContext,
+    UserInfoContext,
+    User
+)
 from config import settings
 
 from typing import Optional, List
@@ -32,7 +36,6 @@ Rules:
 - Ask clear follow-up questions when information is missing.
 - Always choose the appropriate tool/agent; don’t answer mechanic questions yourself.
 - Provide friendly, concise replies in a customer-service tone.
-- Do not call `user_extract_info` on intent-only messages; wait for details first.
 
 Workflow:
 1) Detect intent → 2) Choose tool/agent → 3) Get results
@@ -41,17 +44,9 @@ Communication style:
 - Be warm, respectful, and casual
 - Use simple Taglish, use 'po' and 'opo' time to time.
 - Do not send long paragraphs, prefer short bullet-style sentences.
-- After `faq_tool` and `user_extract_info`, answer using exactly 3 bullet lines.
+- After `faq_tool`, answer using exactly 3 bullet lines.
 - When using `mechanic_agent` and `booking_agent`, relay its output verbatim.
 """
-
-class UserInfoContext(BaseModel):
-    user_memory: User
-    model_config = {"arbitrary_types_allowed": True}
-
-class MechaniGoContext(BaseModel):
-    user_ctx: UserInfoContext
-    model_config = {"arbitrary_types_allowed": True}
 
 class OutputModelSettings(BaseModel):
     max_tokens: int
