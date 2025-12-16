@@ -40,10 +40,12 @@ $env:ENVIRONMENT="development"
 
 - [x] Implement Supabase config (storage)
 
-- [ ] `BookingAgent`
+- [x] `BookingAgent`
+
+    - [ ] Fix save functionality for booking ([ADD-233](https://lica-group.atlassian.net/browse/ADD-233))
 
 - [x] Implement BigQuery config for metrics tracking and analytics
 
 - [x] Optimize response time in `faq_tool` and `MechanicAgent` tool
 
-    - [ ] Fix related issue ([ADD-232](https://lica-group.atlassian.net/browse/ADD-232))
+    - [x] Fix related issue ([ADD-232](https://lica-group.atlassian.net/browse/ADD-232))
