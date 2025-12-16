@@ -1,9 +1,5 @@
-from components.MechaniGoAgent import (
-    UserInfoContext,
-    MechaniGoContext,
-    MechaniGoAgent
-)
-
+from components.schemas import MechaniGoContext, UserInfoContext
+from components.MechaniGoAgent import MechaniGoAgent
 from components.utils import AgentFactory
 
 import components.tools.extraction as extraction_tools

@@ -2,12 +2,13 @@
 The extraction tools library.
 """
 from components.tools.clients import get_openai_client, MODEL_TYPE
-from components.common import function_tool
-from components.utils import ToolRegistry
+from components.common import function_tool, RunContextWrapper
+from components.utils import ToolRegistry, merge_user_memory
+from typing import Any
 import json
 
 @function_tool(name_override="extract_user_info")
-async def extract_user_info(text: str):
+async def extract_user_info(ctx: RunContextWrapper[Any], text: str):
     client = await get_openai_client()
     response = await client.responses.create(
         model=MODEL_TYPE,
@@ -57,9 +58,9 @@ async def extract_user_info(text: str):
     if not tool_calls:
         return {}
 
-    return json.loads(
-        tool_calls[0].arguments
-    )
+    payload = json.loads(tool_calls[0].arguments)
+    merge_user_memory(ctx.context, payload)
+    return payload
 
 ToolRegistry.register_tool(
     "extract.user_info",
