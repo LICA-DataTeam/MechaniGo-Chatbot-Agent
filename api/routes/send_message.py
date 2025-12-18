@@ -9,6 +9,7 @@ from api.common import (
 )
 
 from components import MechaniGoAgent
+from utils import log_execution_time
 from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
@@ -29,6 +30,7 @@ def get_agent(request: Request, user_id: str | None = Depends(resolve_user_id)):
     return factory(user_id)
 
 @router.post("/send-message")
+@log_execution_time("POST /api/v1/send/send-message")
 async def send(
     bg_tasks: BackgroundTasks,
     payload: UserMessagePayload,
