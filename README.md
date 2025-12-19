@@ -48,7 +48,7 @@ $env:ENVIRONMENT="development"
 
         - [ ] Fix endless confirmation loop after saving booking information
 
-- [x] Implement BigQuery config for metrics tracking and analytics
+- [ ] Implement BigQuery config for metrics tracking and analytics
 
 - [x] Optimize response time in `faq_tool` and `MechanicAgent` tool
 
