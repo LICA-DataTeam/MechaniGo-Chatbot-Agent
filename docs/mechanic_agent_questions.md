@@ -70,12 +70,12 @@
 
 # Brand/Model/Year-specific
 
-*Should trigger `mechanic_tool`*
+*Should trigger internal knowledge`*
 
 1. Ano common issues ng Toyota Vios 2018?
 
 2. Anong oil dapat ng Honda City 2020?
 
-3. Gaano kadalas PMS ng Mitsubishi Montero?
+3. Gaano kadalas PMS ng Mitsubishi Montero? - Uses `faq_tool` most of the time
 
 4. May recall ba sa Ford Everest 2018?
